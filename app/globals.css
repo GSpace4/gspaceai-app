@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* ============================================================
+   GSpaceAi Brand — Tailwind v4 CSS-based theme
+   ============================================================ */
+
+@theme inline {
+  /* Brand Colors */
+  --color-brand-blue:   #4285f3;
+  --color-brand-red:    #ea4335;
+  --color-brand-yellow: #fabc04;
+  --color-brand-green:  #35a852;
+  --color-brand-dark:   #1f1f1f;
+  --color-brand-light:  #f8f9fa;
+  --color-brand-border: #e8eaed;
+
+  /* Page defaults */
+  --color-background: #ffffff;
+  --color-foreground: #1f1f1f;
+
+  /* Font */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #1f1f1f;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Smooth scrolling for chat interface */
+html {
+  scroll-behavior: smooth;
+}
