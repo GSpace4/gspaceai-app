@@ -34,22 +34,26 @@ export async function POST(req: NextRequest) {
       const reportData = buildFreeReportData(auditState, user);
       const pdfBuffer = await generateFreeReportPDF(reportData);
 
-      // Persist session + PDF — fire and forget, never blocks the response
+      // Persist session + PDF — awaited so writes complete before function exits
       if (sessionId) {
-        Promise.all([
-          upsertSession(sessionId, {
-            name: user.name,
-            businessName: user.businessName,
-            businessType: user.businessType,
-            industry: user.industry,
-            stage: "free_report_ready",
-            consolidationScore: auditState.gspaceConsolidationScore,
-            scoreLabel: auditState.scoreLabel,
-            estimatedAnnualSavings: auditState.estimatedAnnualSavings,
-            auditData: auditState,
-          }),
-          saveReport(sessionId, reportType, pdfBuffer, reportData),
-        ]).catch((err) => console.warn("[generate-report] Supabase save error:", err));
+        try {
+          await Promise.all([
+            upsertSession(sessionId, {
+              name: user.name,
+              businessName: user.businessName,
+              businessType: user.businessType,
+              industry: user.industry,
+              stage: "free_report_ready",
+              consolidationScore: auditState.gspaceConsolidationScore,
+              scoreLabel: auditState.scoreLabel,
+              estimatedAnnualSavings: auditState.estimatedAnnualSavings,
+              auditData: auditState,
+            }),
+            saveReport(sessionId, reportType, pdfBuffer, reportData),
+          ]);
+        } catch (err) {
+          console.warn("[generate-report] Supabase save error:", err);
+        }
       }
 
       return NextResponse.json({
@@ -66,16 +70,20 @@ export async function POST(req: NextRequest) {
       const pdfBuffer = await generateRecommendationsReportPDF(reportData);
 
       if (sessionId) {
-        Promise.all([
-          upsertSession(sessionId, {
-            stage: "recommendations_report_ready",
-            consolidationScore: auditState.gspaceConsolidationScore,
-            scoreLabel: auditState.scoreLabel,
-            estimatedAnnualSavings: auditState.estimatedAnnualSavings,
-            auditData: auditState,
-          }),
-          saveReport(sessionId, reportType, pdfBuffer, reportData),
-        ]).catch((err) => console.warn("[generate-report] Supabase save error:", err));
+        try {
+          await Promise.all([
+            upsertSession(sessionId, {
+              stage: "recommendations_report_ready",
+              consolidationScore: auditState.gspaceConsolidationScore,
+              scoreLabel: auditState.scoreLabel,
+              estimatedAnnualSavings: auditState.estimatedAnnualSavings,
+              auditData: auditState,
+            }),
+            saveReport(sessionId, reportType, pdfBuffer, reportData),
+          ]);
+        } catch (err) {
+          console.warn("[generate-report] Supabase save error:", err);
+        }
       }
 
       return NextResponse.json({
@@ -92,13 +100,17 @@ export async function POST(req: NextRequest) {
       const pdfBuffer = await generateImplementationGuidePDF(reportData);
 
       if (sessionId) {
-        Promise.all([
-          upsertSession(sessionId, {
-            stage: "implementation_report_ready",
-            auditData: auditState,
-          }),
-          saveReport(sessionId, reportType, pdfBuffer, reportData),
-        ]).catch((err) => console.warn("[generate-report] Supabase save error:", err));
+        try {
+          await Promise.all([
+            upsertSession(sessionId, {
+              stage: "implementation_report_ready",
+              auditData: auditState,
+            }),
+            saveReport(sessionId, reportType, pdfBuffer, reportData),
+          ]);
+        } catch (err) {
+          console.warn("[generate-report] Supabase save error:", err);
+        }
       }
 
       return NextResponse.json({
