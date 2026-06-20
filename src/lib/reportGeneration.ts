@@ -9,6 +9,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { AuditState, UserProfile, SoftwareInventoryItem } from "./types";
 import { logError } from "./db";
+import { calculateImpact, type ImpactDimension } from "./scoring";
 import { calculateConsolidationScore, type ScoreBreakdown } from "./scoring";
 import { estimateSavings, type SavingsEstimate } from "./savingsEstimator";
 
@@ -51,6 +52,8 @@ export type FreeReportData = {
   savings: SavingsEstimate;
   keyFindings: string[];
   manualTasks: string[];
+  primaryImpact: ImpactDimension;
+  secondaryImpact: ImpactDimension;
 };
 
 export function buildFreeReportData(
@@ -59,7 +62,8 @@ export function buildFreeReportData(
 ): FreeReportData {
   const scoreBreakdown = calculateConsolidationScore(audit);
   const savings = estimateSavings(audit);
-  const keyFindings = deriveKeyFindings(audit, scoreBreakdown, savings);
+  const { primary: primaryImpact, secondary: secondaryImpact } = calculateImpact(audit, savings);
+  const keyFindings = deriveKeyFindings(audit, scoreBreakdown, savings, primaryImpact);
 
   const consolidationOpportunities = audit.consolidationOpportunities.map((op) => ({
     title: op.title,
@@ -102,15 +106,24 @@ export function buildFreeReportData(
     savings,
     keyFindings,
     manualTasks: audit.manualTasks.slice(0, 6),
+    primaryImpact,
+    secondaryImpact,
   };
 }
 
 function deriveKeyFindings(
   audit: AuditState,
   score: ScoreBreakdown,
-  savings: SavingsEstimate
+  savings: SavingsEstimate,
+  primaryImpact?: ImpactDimension
 ): string[] {
   const findings: string[] = [];
+
+  if (primaryImpact) {
+    findings.push(
+      `The primary opportunity identified for this business is ${primaryImpact.label.toLowerCase()} through Google Workspace consolidation.`
+    );
+  }
 
   const replaceCount = audit.softwareInventory.filter(
     (s) => s.recommendedAction === "Replace"

@@ -6,7 +6,97 @@
 // ============================================================
 
 import type { AuditState, ConsolidationScoreLabel } from "./types";
+import type { SavingsEstimate } from "./savingsEstimator";
 import { SCORE_RANGES } from "./constants";
+
+// ============================================================
+// Impact Dimensions
+// ============================================================
+
+export type ImpactDimension = {
+  label: string;
+  color: "green" | "blue" | "yellow";
+};
+
+function deriveVisibilityLabel(audit: AuditState): string {
+  const enhanceItems = audit.softwareInventory.filter(i => i.recommendedAction === "Enhance");
+  if (enhanceItems.length > 0) {
+    const first = enhanceItems[0];
+    const usedFor = (first.usedFor ?? "").toLowerCase();
+    if (usedFor.includes("track") || usedFor.includes("renewal")) return "Tracking Visibility Added";
+    if (usedFor.includes("crm") || usedFor.includes("lead"))       return "Lead Visibility Added";
+    if (usedFor.includes("schedul"))                                return "Scheduling Visibility Added";
+    if (usedFor.includes("report"))                                 return "Reporting Visibility Added";
+    if (first.category)                                             return `${first.category} Visibility Added`;
+    return `${enhanceItems.length} Tool${enhanceItems.length > 1 ? "s" : ""} Enhanced`;
+  }
+  if (audit.googleWorkspaceOpportunities.length > 0) {
+    return `${audit.googleWorkspaceOpportunities.length} GW Improvements`;
+  }
+  return "Workflow Visibility Improved";
+}
+
+export function calculateImpact(
+  audit: AuditState,
+  savings: SavingsEstimate
+): { primary: ImpactDimension; secondary: ImpactDimension } {
+  const timeHours =
+    audit.automationOpportunities.length * 2 + audit.manualTasks.length;
+
+  const consolidationCount = audit.softwareInventory.filter(
+    i => i.recommendedAction === "Replace" || i.recommendedAction === "Consolidate"
+  ).length;
+
+  const enhanceCount = audit.softwareInventory.filter(
+    i => i.recommendedAction === "Enhance"
+  ).length;
+
+  const candidates: Array<{ score: number; dim: ImpactDimension }> = [];
+
+  if (savings.estimatedAnnualSavings > 0) {
+    candidates.push({
+      score: savings.estimatedAnnualSavings,
+      dim: { label: `$${savings.estimatedAnnualSavings.toLocaleString()}/yr Saved`, color: "green" },
+    });
+  }
+
+  if (timeHours > 0) {
+    candidates.push({
+      score: timeHours * 150,
+      dim: { label: `${timeHours} hrs/mo Recovered`, color: "blue" },
+    });
+  }
+
+  if (audit.automationOpportunities.length >= 2) {
+    candidates.push({
+      score: audit.automationOpportunities.length * 250,
+      dim: { label: `${audit.automationOpportunities.length} Processes Automated`, color: "yellow" },
+    });
+  }
+
+  if (consolidationCount > 0) {
+    candidates.push({
+      score: consolidationCount * 300,
+      dim: { label: `${consolidationCount} Tool${consolidationCount > 1 ? "s" : ""} Consolidated`, color: "green" },
+    });
+  }
+
+  if (enhanceCount > 0 || audit.googleWorkspaceOpportunities.length > 0) {
+    const visScore = enhanceCount * 400 + audit.googleWorkspaceOpportunities.length * 100;
+    candidates.push({
+      score: visScore,
+      dim: { label: deriveVisibilityLabel(audit), color: "blue" },
+    });
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  const fallback: ImpactDimension = { label: "Google Workspace Optimized", color: "blue" };
+  const primary   = candidates[0]?.dim ?? fallback;
+  const secondary = candidates[1]?.dim ?? candidates[0]?.dim ?? fallback;
+
+  return { primary, secondary };
+}
 
 export type ScoreBreakdown = {
   softwareCountPoints: number;     // up to 20

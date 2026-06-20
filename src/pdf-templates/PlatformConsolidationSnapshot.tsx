@@ -241,18 +241,32 @@ export function PlatformConsolidationSnapshotPDF({ data }: { data: FreeReportDat
               <Text style={[shared.metricValue, { color: C.blue }]}>{score.total}</Text>
               <Text style={shared.metricLabel}>Consolidation Score</Text>
             </View>
-            <View style={shared.metricCard}>
-              <Text style={shared.metricValueGreen}>
-                ${savings.estimatedReplaceableMonthlySpend}/mo
-              </Text>
-              <Text style={shared.metricLabel}>Potential{"\n"}Replaceable Spend</Text>
-            </View>
-            <View style={shared.metricCard}>
-              <Text style={shared.metricValueGreen}>
-                ${savings.estimatedAnnualSavings.toLocaleString()}/yr
-              </Text>
-              <Text style={shared.metricLabel}>Est. Annual{"\n"}Savings</Text>
-            </View>
+            {data.primaryImpact && (
+              <View style={shared.metricCard}>
+                <Text style={[
+                  shared.metricValueGreen,
+                  data.primaryImpact.color === "blue"   ? { color: C.blue }   :
+                  data.primaryImpact.color === "yellow" ? { color: C.yellow } : {},
+                  { fontSize: 9 },
+                ]}>
+                  {data.primaryImpact.label}
+                </Text>
+                <Text style={shared.metricLabel}>Primary{"\n"}Impact</Text>
+              </View>
+            )}
+            {data.secondaryImpact && (
+              <View style={shared.metricCard}>
+                <Text style={[
+                  shared.metricValueGreen,
+                  data.secondaryImpact.color === "blue"   ? { color: C.blue }   :
+                  data.secondaryImpact.color === "yellow" ? { color: C.yellow } : {},
+                  { fontSize: 9 },
+                ]}>
+                  {data.secondaryImpact.label}
+                </Text>
+                <Text style={shared.metricLabel}>Secondary{"\n"}Impact</Text>
+              </View>
+            )}
           </View>
           <View style={shared.metricsRow}>
             <View style={[shared.metricCard, { flex: 2 }]}>

@@ -82,18 +82,30 @@ export default function ReportViewer({ data, pdfBase64, onMarkDisplayed }: Props
             <p className="text-2xl font-bold text-brand-dark">{biz.toolCount}</p>
             <p className="text-xs text-brand-dark/50 mt-0.5">Tools Analyzed</p>
           </div>
-          <div className="bg-brand-light rounded-xl p-3 text-center">
-            <p className="text-xl font-bold text-brand-green">
-              ${savings.estimatedReplaceableMonthlySpend}/mo
-            </p>
-            <p className="text-xs text-brand-dark/50 mt-0.5">Potential Savings</p>
-          </div>
-          <div className="bg-brand-light rounded-xl p-3 text-center">
-            <p className="text-xl font-bold text-brand-green">
-              ${savings.estimatedAnnualSavings.toLocaleString()}/yr
-            </p>
-            <p className="text-xs text-brand-dark/50 mt-0.5">Est. Annual Savings</p>
-          </div>
+          {data.primaryImpact && (
+            <div className="bg-brand-light rounded-xl p-3 text-center">
+              <p className={`text-base font-bold leading-tight ${
+                data.primaryImpact.color === "green" ? "text-brand-green" :
+                data.primaryImpact.color === "yellow" ? "text-brand-yellow" :
+                "text-brand-blue"
+              }`}>
+                {data.primaryImpact.label}
+              </p>
+              <p className="text-xs text-brand-dark/50 mt-0.5">Primary Impact</p>
+            </div>
+          )}
+          {data.secondaryImpact && (
+            <div className="bg-brand-light rounded-xl p-3 text-center">
+              <p className={`text-base font-bold leading-tight ${
+                data.secondaryImpact.color === "green" ? "text-brand-green" :
+                data.secondaryImpact.color === "yellow" ? "text-brand-yellow" :
+                "text-brand-blue"
+              }`}>
+                {data.secondaryImpact.label}
+              </p>
+              <p className="text-xs text-brand-dark/50 mt-0.5">Secondary Impact</p>
+            </div>
+          )}
         </div>
 
         {/* Score label */}
