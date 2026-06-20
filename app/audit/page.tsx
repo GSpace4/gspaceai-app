@@ -10,14 +10,23 @@ import OfferCard from "@/src/components/OfferCard";
 import PaymentVerificationModal from "@/src/components/PaymentVerificationModal";
 import { isAuditStage } from "@/src/lib/workflowState";
 import type { FreeReportData } from "@/src/lib/reportGeneration";
-import type { PaymentsState } from "@/src/lib/types";
+import type { PaymentsState, AuditState } from "@/src/lib/types";
+import { calculateImpact } from "@/src/lib/scoring";
+import { estimateSavings } from "@/src/lib/savingsEstimator";
 
 // Inline display card for the Recommendations Report
-function RecommendationsReportCard({ data, pdfBase64, businessName, generatedAt, onMarkDisplayed }: {
+function ImpactCardColor({ color }: { color: "green" | "blue" | "yellow" }) {
+  if (color === "green")  return "text-brand-green";
+  if (color === "yellow") return "text-brand-yellow";
+  return "text-brand-blue";
+}
+
+function RecommendationsReportCard({ data, pdfBase64, businessName, generatedAt, audit, onMarkDisplayed }: {
   data: Record<string, unknown>;
   pdfBase64: string;
   businessName: string;
   generatedAt: string;
+  audit: AuditState;
   onMarkDisplayed: () => void;
 }) {
   // Mark displayed once on mount
@@ -34,9 +43,9 @@ function RecommendationsReportCard({ data, pdfBase64, businessName, generatedAt,
     URL.revokeObjectURL(url);
   }
 
-  const savings = data.savings as { estimatedReplaceableMonthlySpend?: number; estimatedAnnualSavings?: number } | undefined;
-  const score = data.scoreBreakdown as { total?: number; label?: string } | undefined;
+  const score = data.scoreBreakdown as { total?: number } | undefined;
   const executiveSummary = data.executiveSummary as string | undefined;
+  const { primary, secondary } = calculateImpact(audit, estimateSavings(audit));
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-6 space-y-4">
@@ -57,25 +66,25 @@ function RecommendationsReportCard({ data, pdfBase64, businessName, generatedAt,
             Download PDF
           </button>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           {score?.total !== undefined && (
             <div className="bg-brand-light rounded-xl p-3 text-center">
               <p className="text-2xl font-bold text-brand-blue">{score.total}</p>
               <p className="text-xs text-brand-dark/50 mt-0.5">Consolidation Score</p>
             </div>
           )}
-          {savings?.estimatedReplaceableMonthlySpend !== undefined && (
-            <div className="bg-brand-light rounded-xl p-3 text-center">
-              <p className="text-xl font-bold text-brand-green">${savings.estimatedReplaceableMonthlySpend}/mo</p>
-              <p className="text-xs text-brand-dark/50 mt-0.5">Potential Savings</p>
-            </div>
-          )}
-          {savings?.estimatedAnnualSavings !== undefined && (
-            <div className="bg-brand-light rounded-xl p-3 text-center">
-              <p className="text-xl font-bold text-brand-green">${savings.estimatedAnnualSavings.toLocaleString()}/yr</p>
-              <p className="text-xs text-brand-dark/50 mt-0.5">Est. Annual Savings</p>
-            </div>
-          )}
+          <div className="bg-brand-light rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-brand-dark">{audit.softwareInventory.length}</p>
+            <p className="text-xs text-brand-dark/50 mt-0.5">Tools Analyzed</p>
+          </div>
+          <div className="bg-brand-light rounded-xl p-3 text-center">
+            <p className={`text-base font-bold leading-tight ${ImpactCardColor({ color: primary.color })}`}>{primary.label}</p>
+            <p className="text-xs text-brand-dark/50 mt-0.5">Primary Impact</p>
+          </div>
+          <div className="bg-brand-light rounded-xl p-3 text-center">
+            <p className={`text-base font-bold leading-tight ${ImpactCardColor({ color: secondary.color })}`}>{secondary.label}</p>
+            <p className="text-xs text-brand-dark/50 mt-0.5">Secondary Impact</p>
+          </div>
         </div>
         {executiveSummary && (
           <div className="bg-brand-blue/5 rounded-xl p-4 border border-brand-blue/10">
@@ -88,11 +97,12 @@ function RecommendationsReportCard({ data, pdfBase64, businessName, generatedAt,
 }
 
 // Inline display card for the Implementation Guide + SOP Book
-function ImplDeliveryCard({ data, pdfBase64, businessName, generatedAt, onMarkDisplayed }: {
+function ImplDeliveryCard({ data, pdfBase64, businessName, generatedAt, audit, onMarkDisplayed }: {
   data?: Record<string, unknown> | null;
   pdfBase64: string | null;
   businessName: string;
   generatedAt?: string;
+  audit: AuditState;
   onMarkDisplayed: () => void;
 }) {
   const marked = useRef(false);
@@ -110,15 +120,7 @@ function ImplDeliveryCard({ data, pdfBase64, businessName, generatedAt, onMarkDi
   }
 
   const executiveSummary = data?.executiveSummary as string | undefined;
-  const phases = data?.systemBuildGuides as unknown[] | undefined;
-  const ownerSops = data?.ownerSOPs as unknown[] | undefined;
-  const employeeSops = data?.employeeSOPs as unknown[] | undefined;
-  const sops = ownerSops !== undefined || employeeSops !== undefined
-    ? [...(ownerSops ?? []), ...(employeeSops ?? [])]
-    : undefined;
-  const automations = data?.appsScriptOpportunities as unknown[] | undefined;
-  const weeks = data?.estimatedCompletionWeeks as number | undefined;
-  const savings = data?.savings as { estimatedAnnualSavings?: number } | undefined;
+  const { primary, secondary } = calculateImpact(audit, estimateSavings(audit));
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-6 space-y-4">
@@ -146,41 +148,25 @@ function ImplDeliveryCard({ data, pdfBase64, businessName, generatedAt, onMarkDi
           )}
         </div>
 
-        {/* Metrics row — shown when report data is available */}
-        {data && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            {phases !== undefined && (
-              <div className="bg-brand-light rounded-xl p-3 text-center">
-                <p className="text-2xl font-bold text-brand-blue">{phases.length}</p>
-                <p className="text-xs text-brand-dark/50 mt-0.5">Build Phases</p>
-              </div>
-            )}
-            {automations !== undefined && (
-              <div className="bg-brand-light rounded-xl p-3 text-center">
-                <p className="text-2xl font-bold text-brand-dark">{automations.length}</p>
-                <p className="text-xs text-brand-dark/50 mt-0.5">Automations</p>
-              </div>
-            )}
-            {sops !== undefined && (
-              <div className="bg-brand-light rounded-xl p-3 text-center">
-                <p className="text-2xl font-bold text-brand-dark">{sops.length}</p>
-                <p className="text-xs text-brand-dark/50 mt-0.5">SOP Documents</p>
-              </div>
-            )}
-            {weeks !== undefined && (
-              <div className="bg-brand-light rounded-xl p-3 text-center">
-                <p className="text-xl font-bold text-brand-green">{weeks}w</p>
-                <p className="text-xs text-brand-dark/50 mt-0.5">Est. Timeline</p>
-              </div>
-            )}
-            {savings?.estimatedAnnualSavings !== undefined && (
-              <div className="bg-brand-light rounded-xl p-3 text-center sm:col-span-0">
-                <p className="text-xl font-bold text-brand-green">${savings.estimatedAnnualSavings.toLocaleString()}/yr</p>
-                <p className="text-xs text-brand-dark/50 mt-0.5">Est. Savings</p>
-              </div>
-            )}
+        {/* Metrics row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <div className="bg-brand-light rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-brand-dark">{audit.softwareInventory.length}</p>
+            <p className="text-xs text-brand-dark/50 mt-0.5">Tools Analyzed</p>
           </div>
-        )}
+          <div className="bg-brand-light rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-brand-blue">{audit.automationOpportunities.length + audit.consolidationOpportunities.length}</p>
+            <p className="text-xs text-brand-dark/50 mt-0.5">Opportunities</p>
+          </div>
+          <div className="bg-brand-light rounded-xl p-3 text-center">
+            <p className={`text-base font-bold leading-tight ${ImpactCardColor({ color: primary.color })}`}>{primary.label}</p>
+            <p className="text-xs text-brand-dark/50 mt-0.5">Primary Impact</p>
+          </div>
+          <div className="bg-brand-light rounded-xl p-3 text-center">
+            <p className={`text-base font-bold leading-tight ${ImpactCardColor({ color: secondary.color })}`}>{secondary.label}</p>
+            <p className="text-xs text-brand-dark/50 mt-0.5">Secondary Impact</p>
+          </div>
+        </div>
 
         {/* Executive summary */}
         {executiveSummary && (
@@ -606,6 +592,7 @@ export default function AuditPage() {
                 pdfBase64={recPdfBase64}
                 businessName={state.user.businessName}
                 generatedAt={(recReportData.generatedAt as string) ?? new Date().toISOString()}
+                audit={state.audit}
                 onMarkDisplayed={() => dispatch({ type: "SET_DELIVERABLE_STATUS", key: "recommendations_report", status: "displayed" })}
               />
             </div>
@@ -655,6 +642,7 @@ export default function AuditPage() {
                 pdfBase64={implPdfBase64}
                 businessName={state.user.businessName}
                 generatedAt={(implReportData?.generatedAt as string) ?? new Date().toISOString()}
+                audit={state.audit}
                 onMarkDisplayed={handleImplReportDisplayed}
               />
             </div>
@@ -668,6 +656,7 @@ export default function AuditPage() {
                 pdfBase64={null}
                 businessName={state.user.businessName}
                 generatedAt={new Date().toISOString()}
+                audit={state.audit}
                 onMarkDisplayed={handleImplReportDisplayed}
               />
             </div>
