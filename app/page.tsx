@@ -16,7 +16,7 @@ export default function Home() {
         {/* Badge */}
         <div className="inline-flex items-center gap-2 bg-brand-blue/10 text-brand-blue text-xs font-semibold px-3 py-1.5 rounded-full mb-8">
           <span className="w-1.5 h-1.5 bg-brand-blue rounded-full" />
-          FREE For A Limited Time
+          Only takes 5 minutes!
         </div>
 
         {/* Headline */}
