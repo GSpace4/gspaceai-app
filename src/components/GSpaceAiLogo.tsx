@@ -1,5 +1,5 @@
-// GSpaceAi Logo — SVG recreation from brand guide
-// Icon: rounded square with Google-color corner arcs + sparkle
+// GSpaceAi Logo — matches actual brand logo
+// Icon: 4 colored corner brackets + inward diagonal arrows + center sparkle
 // Wordmark: "GSpace" in charcoal, "Ai" in brand blue
 
 type LogoProps = {
@@ -14,6 +14,9 @@ const SIZES = {
   lg: { icon: 52, wordmark: "text-4xl" },
 };
 
+// Simple right-pointing arrow path, centered at origin — rotated per corner
+const ARROW = "M -7 -2.5 L 3 -2.5 L 3 -5.5 L 9 0 L 3 5.5 L 3 2.5 L -7 2.5 Z";
+
 export default function GSpaceAiLogo({
   size = "md",
   showWordmark = true,
@@ -27,63 +30,48 @@ export default function GSpaceAiLogo({
       <svg
         width={icon}
         height={icon}
-        viewBox="0 0 48 48"
+        viewBox="0 0 100 100"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         aria-label="GSpaceAi icon"
       >
-        {/* Background rounded square */}
-        <rect width="48" height="48" rx="10" fill="#f8f9fa" />
+        {/* ── Corner brackets (thick rounded L-shapes) ── */}
 
-        {/* Top-left arc — Blue */}
+        {/* Blue — top-left */}
         <path
-          d="M6 18 C6 11 11 6 18 6 L6 6 Z"
-          fill="#4285f3"
+          d="M 8 38 L 8 16 Q 8 8 16 8 L 38 8"
+          stroke="#4285f3" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round"
         />
+        {/* Red — top-right */}
         <path
-          d="M6 6 L18 6 C11.4 6 6 11.4 6 18 Z"
-          fill="#4285f3"
+          d="M 62 8 L 84 8 Q 92 8 92 16 L 92 38"
+          stroke="#ea4335" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round"
         />
-
-        {/* Top-right arc — Red */}
+        {/* Green — bottom-left */}
         <path
-          d="M42 18 C42 11 37 6 30 6 L42 6 Z"
-          fill="#ea4335"
+          d="M 8 62 L 8 84 Q 8 92 16 92 L 38 92"
+          stroke="#35a852" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round"
         />
+        {/* Yellow — bottom-right */}
         <path
-          d="M42 6 L30 6 C36.6 6 42 11.4 42 18 Z"
-          fill="#ea4335"
-        />
-
-        {/* Bottom-left arc — Green */}
-        <path
-          d="M6 30 C6 37 11 42 18 42 L6 42 Z"
-          fill="#35a852"
-        />
-        <path
-          d="M6 42 L18 42 C11.4 42 6 36.6 6 30 Z"
-          fill="#35a852"
+          d="M 62 92 L 84 92 Q 92 92 92 84 L 92 62"
+          stroke="#fabc04" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round"
         />
 
-        {/* Bottom-right arc — Yellow */}
-        <path
-          d="M42 30 C42 37 37 42 30 42 L42 42 Z"
-          fill="#fabc04"
-        />
-        <path
-          d="M42 42 L30 42 C36.6 42 42 36.6 42 30 Z"
-          fill="#fabc04"
-        />
+        {/* ── Inward diagonal arrows ── */}
 
-        {/* Corner dots */}
-        <circle cx="10" cy="10" r="2" fill="#4285f3" opacity="0.7" />
-        <circle cx="38" cy="10" r="2" fill="#ea4335" opacity="0.7" />
-        <circle cx="10" cy="38" r="2" fill="#35a852" opacity="0.7" />
-        <circle cx="38" cy="38" r="2" fill="#fabc04" opacity="0.7" />
+        {/* Blue ↘ — top-left quadrant */}
+        <path d={ARROW} transform="translate(29,29) rotate(45)"  fill="#4285f3" />
+        {/* Red ↙ — top-right quadrant */}
+        <path d={ARROW} transform="translate(71,29) rotate(135)" fill="#ea4335" />
+        {/* Green ↗ — bottom-left quadrant */}
+        <path d={ARROW} transform="translate(29,71) rotate(-45)" fill="#35a852" />
+        {/* Yellow ↖ — bottom-right quadrant */}
+        <path d={ARROW} transform="translate(71,71) rotate(225)" fill="#fabc04" />
 
-        {/* Center sparkle — Blue */}
+        {/* ── Center 4-pointed sparkle ── */}
         <path
-          d="M24 14 L25.5 21 L32 24 L25.5 27 L24 34 L22.5 27 L16 24 L22.5 21 Z"
+          d="M 50 35 L 55 45 L 65 50 L 55 55 L 50 65 L 45 55 L 35 50 L 45 45 Z"
           fill="#4285f3"
         />
       </svg>
