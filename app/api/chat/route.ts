@@ -18,12 +18,13 @@ type ChatRequestBody = {
   stage?: string;
   sessionId?: string;
   isFirstMessage?: boolean;
+  hadBusinessName?: boolean;
 };
 
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as ChatRequestBody;
-    const { messages, userMessage, stage, sessionId, isFirstMessage } = body;
+    const { messages, userMessage, stage, sessionId, isFirstMessage, hadBusinessName } = body;
 
     if (!userMessage?.trim()) {
       return NextResponse.json(
@@ -32,12 +33,43 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Write a session stub on the first user message — captures abandoned audits
+    // Milestone 1: first message — create session stub
     if (isFirstMessage && sessionId) {
       upsertSession(sessionId, { stage: "audit_in_progress" }).catch(() => {});
     }
 
     const response = await callGeminiAudit(messages, userMessage.trim(), stage);
+
+    if (sessionId) {
+      const profile = response.extractedData?.userProfile as {
+        name?: string;
+        businessName?: string;
+        businessType?: string;
+        industry?: string;
+      } | undefined;
+
+      const userMessageCount = messages.filter(m => m.role === "user").length;
+
+      // Milestone 2: business name just extracted for the first time
+      if (!hadBusinessName && profile?.businessName) {
+        upsertSession(sessionId, {
+          name:         profile.name         || undefined,
+          businessName: profile.businessName,
+          businessType: profile.businessType || undefined,
+          industry:     profile.industry     || undefined,
+        }).catch(() => {});
+      }
+
+      // Milestone 3: 5th user message
+      if (userMessageCount === 5) {
+        upsertSession(sessionId, {
+          ...(profile?.name         && { name:         profile.name }),
+          ...(profile?.businessName && { businessName: profile.businessName }),
+          ...(profile?.businessType && { businessType: profile.businessType }),
+          ...(profile?.industry     && { industry:     profile.industry }),
+        }).catch(() => {});
+      }
+    }
 
     return NextResponse.json(response);
   } catch (err) {

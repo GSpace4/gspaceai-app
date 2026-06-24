@@ -125,6 +125,7 @@ export default function ChatInterface() {
             stage,
             sessionId,
             isFirstMessage: userMessageCount === 1,
+            hadBusinessName: !!user.businessName,
           }),
         });
 
