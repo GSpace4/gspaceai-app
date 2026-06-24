@@ -52,22 +52,26 @@ export async function POST(req: NextRequest) {
 
       // Milestone 2: business name just extracted for the first time
       if (!hadBusinessName && profile?.businessName) {
-        upsertSession(sessionId, {
-          name:         profile.name         || undefined,
-          businessName: profile.businessName,
-          businessType: profile.businessType || undefined,
-          industry:     profile.industry     || undefined,
-        }).catch(() => {});
+        try {
+          await upsertSession(sessionId, {
+            name:         profile.name         || undefined,
+            businessName: profile.businessName,
+            businessType: profile.businessType || undefined,
+            industry:     profile.industry     || undefined,
+          });
+        } catch {}
       }
 
       // Milestone 3: 5th user message
       if (userMessageCount === 5) {
-        upsertSession(sessionId, {
-          ...(profile?.name         && { name:         profile.name }),
-          ...(profile?.businessName && { businessName: profile.businessName }),
-          ...(profile?.businessType && { businessType: profile.businessType }),
-          ...(profile?.industry     && { industry:     profile.industry }),
-        }).catch(() => {});
+        try {
+          await upsertSession(sessionId, {
+            ...(profile?.name         && { name:         profile.name }),
+            ...(profile?.businessName && { businessName: profile.businessName }),
+            ...(profile?.businessType && { businessType: profile.businessType }),
+            ...(profile?.industry     && { industry:     profile.industry }),
+          });
+        } catch {}
       }
     }
 
