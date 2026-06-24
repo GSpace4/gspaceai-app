@@ -25,8 +25,13 @@ export default function Home() {
         </h1>
 
         {/* Subheadline */}
-        <p className="text-lg text-brand-dark/60 max-w-xl mb-10 leading-relaxed">
+        <p className="text-lg text-brand-dark/60 max-w-xl mb-3 leading-relaxed">
           {APP_COPY.landingSubheadline}
+        </p>
+
+        {/* Supporting line */}
+        <p className="text-lg text-brand-blue max-w-xl mb-10 leading-relaxed">
+          Answer A Few Questions About Your Current Tools. Get A Personalized Report.
         </p>
 
         {/* CTA — clears any stale session, then navigates to /audit */}
