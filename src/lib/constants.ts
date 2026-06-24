@@ -194,10 +194,9 @@ export const PAYMENT_ERROR_MESSAGES = {
 export const APP_COPY = {
   introMessage:
     "Hi, I'm GSpaceAi. I'll help you find software you may be paying for twice and show where Google Workspace could potentially replace or simplify your current tools. First, what's your name?",
-  landingHeadline: "You're Already Paying For Google Workspace. Are You Still Paying For The Same Features Somewhere Else?",
-  landingSubheadline:
-    "GSpaceAi identifies software overlap, operational bottlenecks, and opportunities to build lightweight systems inside Google Workspace.",
-  landingCta: "Start Free Assessment",
+  landingHeadline: "You're Paying For Tools Google Workspace Can Replace.",
+  landingSubheadline: "Find Out Exactly Which Ones In 5 Minutes. Free.",
+  landingCta: "Start Free Audit",
   landingBullets: [
     "Find overlapping software subscriptions",
     "Estimate potential monthly savings",
