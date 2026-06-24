@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { callGeminiAudit } from "@/src/lib/aiAuditLogic";
+import { upsertSession } from "@/src/lib/db";
 import type { ChatMessage } from "@/src/lib/types";
 
 export const runtime = "nodejs";
@@ -15,18 +16,25 @@ type ChatRequestBody = {
   messages: ChatMessage[];
   userMessage: string;
   stage?: string;
+  sessionId?: string;
+  isFirstMessage?: boolean;
 };
 
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as ChatRequestBody;
-    const { messages, userMessage, stage } = body;
+    const { messages, userMessage, stage, sessionId, isFirstMessage } = body;
 
     if (!userMessage?.trim()) {
       return NextResponse.json(
         { error: "userMessage is required" },
         { status: 400 }
       );
+    }
+
+    // Write a session stub on the first user message — captures abandoned audits
+    if (isFirstMessage && sessionId) {
+      upsertSession(sessionId, { stage: "audit_in_progress" }).catch(() => {});
     }
 
     const response = await callGeminiAudit(messages, userMessage.trim(), stage);

@@ -19,7 +19,7 @@ function makeMessage(role: ChatMessage["role"], content: string): ChatMessage {
 
 export default function ChatInterface() {
   const { state, dispatch, transition, isHydrated } = useAppState();
-  const { stage, messages, user } = state;
+  const { stage, messages, user, sessionId } = state;
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -115,10 +115,17 @@ export default function ChatInterface() {
       setIsLoading(true);
       setError(null);
       try {
+        const userMessageCount = messagesArray.filter(m => m.role === "user").length;
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: messagesArray, userMessage: userText, stage }),
+          body: JSON.stringify({
+            messages: messagesArray,
+            userMessage: userText,
+            stage,
+            sessionId,
+            isFirstMessage: userMessageCount === 1,
+          }),
         });
 
         if (!res.ok) {
