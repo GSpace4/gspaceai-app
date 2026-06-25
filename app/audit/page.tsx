@@ -193,6 +193,29 @@ export default function AuditPage() {
   const { state, dispatch, transition, isHydrated } = useAppState();
   const { stage } = state;
 
+  // Mobile keyboard fix: track the visual viewport height so the layout
+  // resizes correctly when the software keyboard opens on iOS/Android.
+  const [viewportHeight, setViewportHeight] = useState<string>("100dvh");
+
+  useEffect(() => {
+    // Prevent iOS Safari from panning the document when the keyboard opens
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setViewportHeight(`${vv.height}px`);
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    update();
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
+
   // Free report state
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [reportData, setReportData] = useState<FreeReportData | null>(null);
@@ -465,7 +488,7 @@ export default function AuditPage() {
   const showOffer = showFreeOffer;
 
   return (
-    <div className="flex flex-col h-dvh bg-brand-light">
+    <div className="flex flex-col bg-brand-light" style={{ height: viewportHeight }}>
       {/* Header */}
       <header className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 bg-white border-b border-brand-border">
         <GSpaceAiLogo size="sm" showWordmark />
