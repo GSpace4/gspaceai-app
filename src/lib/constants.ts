@@ -193,7 +193,7 @@ export const PAYMENT_ERROR_MESSAGES = {
 
 export const APP_COPY = {
   introMessage:
-    "Hi, I'm GSpaceAi. I'll help you find software you may be paying for twice and show where Google Workspace could potentially replace or simplify your current tools. First, what's your name?",
+    "Hi! I'm GSpaceAi, let's see what tools you can cut or where you can save time. First, what's your name?",
   landingHeadline: "You're Paying For Tools Google Workspace Can Replace.",
   landingSubheadline: "Find Out Exactly Which Ones In 5 Minutes. Free.",
   landingCta: "Start Free Audit",
