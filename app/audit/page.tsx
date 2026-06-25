@@ -200,15 +200,6 @@ export default function AuditPage() {
   // keyboardHeight stays 0 and bottom: 0 fills the available space correctly.
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  useEffect(() => {
-    // Prevent any document-level scroll so iOS can't pan the page
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.documentElement.style.overflow = "";
-      document.body.style.overflow = "";
-    };
-  }, []);
 
   useEffect(() => {
     const vv = window.visualViewport;
