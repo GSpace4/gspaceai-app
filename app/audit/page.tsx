@@ -208,10 +208,17 @@ export default function AuditPage() {
       // iOS: innerHeight is constant, vv.height shrinks → difference = keyboard height
       // Chrome: innerHeight shrinks too, so difference ≈ 0 (Chrome handles it natively)
       setKeyboardHeight(Math.max(0, window.innerHeight - vv.height));
+      // Sync the layout viewport scroll with the visual viewport offset so that
+      // position:fixed elements stay visually anchored when iOS pans the viewport
+      window.scrollTo(vv.offsetLeft, vv.offsetTop);
     };
     vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
     update();
-    return () => vv.removeEventListener("resize", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
   }, []);
 
   // Free report state
