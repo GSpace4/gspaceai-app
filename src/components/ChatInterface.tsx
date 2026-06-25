@@ -36,6 +36,27 @@ export default function ChatInterface() {
   }, [messages, isLoading]);
 
   // ------------------------------------------------------------
+  // Counter-scroll when keyboard opens on mobile.
+  // iOS auto-scrolls the messages container when any input is focused,
+  // pushing messages off screen. We snap back to the bottom immediately.
+  // ------------------------------------------------------------
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let lastHeight = vv.height;
+    const handleResize = () => {
+      if (vv.height < lastHeight) {
+        requestAnimationFrame(() => {
+          bottomRef.current?.scrollIntoView({ behavior: "instant" });
+        });
+      }
+      lastHeight = vv.height;
+    };
+    vv.addEventListener("resize", handleResize);
+    return () => vv.removeEventListener("resize", handleResize);
+  }, []);
+
+  // ------------------------------------------------------------
   // Initialize: add intro message only AFTER hydration is complete.
   // This ensures we know whether localStorage had existing messages.
   // ------------------------------------------------------------
@@ -243,6 +264,11 @@ export default function ChatInterface() {
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
+              onFocus={() => {
+                setTimeout(() => {
+                  bottomRef.current?.scrollIntoView({ behavior: "instant" });
+                }, 300);
+              }}
               placeholder={
                 stage === "collect_name"
                   ? "Type your name..."
