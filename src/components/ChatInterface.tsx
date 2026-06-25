@@ -264,6 +264,7 @@ export default function ChatInterface() {
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
+              onTouchStart={() => window.scrollTo(0, 0)}
               onFocus={() => {
                 setTimeout(() => window.scrollTo(0, 0), 100);
                 setTimeout(() => window.scrollTo(0, 0), 300);
