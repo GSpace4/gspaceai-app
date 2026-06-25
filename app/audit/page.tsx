@@ -205,12 +205,9 @@ export default function AuditPage() {
     const vv = window.visualViewport;
     if (!vv) return;
     const update = () => {
-      // iOS: innerHeight is constant, vv.height shrinks → difference = keyboard height
-      // Chrome: innerHeight shrinks too, so difference ≈ 0 (Chrome handles it natively)
       setKeyboardHeight(Math.max(0, window.innerHeight - vv.height));
-      // Sync the layout viewport scroll with the visual viewport offset so that
-      // position:fixed elements stay visually anchored when iOS pans the viewport
-      window.scrollTo(vv.offsetLeft, vv.offsetTop);
+      // When iOS pans the viewport upward on keyboard open, scroll back down
+      window.scrollTo(0, 0);
     };
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);

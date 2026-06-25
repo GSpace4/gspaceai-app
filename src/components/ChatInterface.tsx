@@ -265,9 +265,8 @@ export default function ChatInterface() {
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               onFocus={() => {
-                setTimeout(() => {
-                  bottomRef.current?.scrollIntoView({ behavior: "instant" });
-                }, 300);
+                setTimeout(() => window.scrollTo(0, 0), 100);
+                setTimeout(() => window.scrollTo(0, 0), 300);
               }}
               placeholder={
                 stage === "collect_name"
