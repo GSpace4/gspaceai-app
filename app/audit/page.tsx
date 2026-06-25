@@ -193,30 +193,6 @@ export default function AuditPage() {
   const { state, dispatch, transition, isHydrated } = useAppState();
   const { stage } = state;
 
-  // Mobile keyboard fix: position: fixed container + track keyboard height.
-  // iOS Safari can't pan a fixed container, so the layout stays anchored.
-  // keyboardHeight pushes the container's bottom edge above the keyboard.
-  // On Chrome Android, innerHeight already shrinks with the keyboard, so
-  // keyboardHeight stays 0 and bottom: 0 fills the available space correctly.
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const update = () => {
-      setKeyboardHeight(Math.max(0, window.innerHeight - vv.height));
-      // When iOS pans the viewport upward on keyboard open, scroll back down
-      window.scrollTo(0, 0);
-    };
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    update();
-    return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-    };
-  }, []);
 
   // Free report state
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
@@ -490,10 +466,7 @@ export default function AuditPage() {
   const showOffer = showFreeOffer;
 
   return (
-    <div
-      className="flex flex-col bg-brand-light"
-      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: keyboardHeight }}
-    >
+    <div className="fixed inset-0 flex flex-col bg-brand-light">
       {/* Header */}
       <header className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 bg-white border-b border-brand-border">
         <GSpaceAiLogo size="sm" showWordmark />

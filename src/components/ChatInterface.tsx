@@ -28,33 +28,25 @@ export default function ChatInterface() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const hasInitialized = useRef(false);
 
+  // Input area height — measured so messages area knows how much space to leave
+  const inputAreaRef = useRef<HTMLDivElement>(null);
+  const [inputAreaHeight, setInputAreaHeight] = useState(80);
+
+  useEffect(() => {
+    const el = inputAreaRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setInputAreaHeight(el.offsetHeight));
+    ro.observe(el);
+    setInputAreaHeight(el.offsetHeight);
+    return () => ro.disconnect();
+  }, []);
+
   // ------------------------------------------------------------
   // Auto-scroll to bottom on new messages
   // ------------------------------------------------------------
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
-
-  // ------------------------------------------------------------
-  // Counter-scroll when keyboard opens on mobile.
-  // iOS auto-scrolls the messages container when any input is focused,
-  // pushing messages off screen. We snap back to the bottom immediately.
-  // ------------------------------------------------------------
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    let lastHeight = vv.height;
-    const handleResize = () => {
-      if (vv.height < lastHeight) {
-        requestAnimationFrame(() => {
-          bottomRef.current?.scrollIntoView({ behavior: "instant" });
-        });
-      }
-      lastHeight = vv.height;
-    };
-    vv.addEventListener("resize", handleResize);
-    return () => vv.removeEventListener("resize", handleResize);
-  }, []);
 
   // ------------------------------------------------------------
   // Initialize: add intro message only AFTER hydration is complete.
@@ -236,9 +228,12 @@ export default function ChatInterface() {
   // Render
   // ------------------------------------------------------------
   return (
-    <div className="flex flex-col h-full">
-      {/* Message list */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-3">
+    <div className="relative flex-1 min-h-0">
+      {/* Message list — scrolls independently, sits above input */}
+      <div
+        className="absolute inset-x-0 top-0 overflow-y-auto px-4 py-6 space-y-3"
+        style={{ bottom: inputAreaHeight }}
+      >
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
@@ -255,20 +250,15 @@ export default function ChatInterface() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
+      {/* Input area — anchored to bottom of container */}
       {canSendMessage && (
-        <div className="border-t border-brand-border bg-white px-4 py-3">
+        <div ref={inputAreaRef} className="absolute bottom-0 inset-x-0 border-t border-brand-border bg-white px-4 py-3">
           <div className="flex gap-2 items-end max-w-3xl mx-auto">
             <textarea
               ref={inputRef}
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              onTouchStart={() => window.scrollTo(0, 0)}
-              onFocus={() => {
-                setTimeout(() => window.scrollTo(0, 0), 100);
-                setTimeout(() => window.scrollTo(0, 0), 300);
-              }}
               placeholder={
                 stage === "collect_name"
                   ? "Type your name..."
