@@ -465,7 +465,7 @@ export default function AuditPage() {
   const showOffer = showFreeOffer;
 
   return (
-    <div className="flex flex-col h-screen bg-brand-light">
+    <div className="flex flex-col h-dvh bg-brand-light">
       {/* Header */}
       <header className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 bg-white border-b border-brand-border">
         <GSpaceAiLogo size="sm" showWordmark />

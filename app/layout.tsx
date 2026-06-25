@@ -19,6 +19,11 @@ export const metadata: Metadata = {
     "Discover which tools you're paying for that Google Workspace may already be able to replace. Get your free Platform Consolidation Snapshot.",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{

@@ -254,7 +254,7 @@ export default function ChatInterface() {
               disabled={isLoading}
               className="
                 flex-1 resize-none rounded-xl border border-brand-border px-4 py-2.5
-                text-sm text-brand-dark placeholder-brand-dark/40
+                text-base sm:text-sm text-brand-dark placeholder-brand-dark/40
                 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue
                 disabled:opacity-50 disabled:cursor-not-allowed
                 transition-all overflow-hidden
