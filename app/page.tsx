@@ -30,7 +30,7 @@ export default function Home() {
         </p>
 
         {/* Supporting line */}
-        <p className="text-lg text-brand-blue max-w-xl mb-10 leading-relaxed">
+        <p className="text-lg text-brand-green max-w-xl mb-10 leading-relaxed">
           Answer A Few Questions About Your Current Tools. Get A Personalized Report.
         </p>
 
