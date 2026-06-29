@@ -272,15 +272,20 @@ export default function AuditPage() {
         // data.reportData is the full FreeReportData object with correct property names
         setReportData(data.reportData as FreeReportData);
 
-        // Build and store free report summary for $29 questionnaire + report context
+        // Store the full structured analysis as the single source of truth for all tiers
+        if (data.analysisData) {
+          dispatch({ type: "SET_FREE_ANALYSIS_DATA", data: data.analysisData });
+        }
+
+        // Also build a text summary for $79 chat context
         const rd = data.reportData as FreeReportData;
         if (rd) {
-          const toolList    = rd.softwareInventory?.map((t: {name: string}) => t.name).join(", ") ?? "";
-          const topOpps     = rd.consolidationOpportunities?.slice(0, 3).map((o: {title: string}) => o.title).join("; ") ?? "";
-          const findings    = rd.keyFindings?.slice(0, 3).join(" ") ?? "";
-          const score       = rd.scoreBreakdown;
-          const savings     = rd.savings;
-          const summary     = [
+          const toolList = rd.softwareInventory?.map((t: {name: string}) => t.name).join(", ") ?? "";
+          const topOpps  = rd.consolidationOpportunities?.slice(0, 3).map((o: {title: string}) => o.title).join("; ") ?? "";
+          const findings = rd.keyFindings?.slice(0, 3).join(" ") ?? "";
+          const score    = rd.scoreBreakdown;
+          const savings  = rd.savings;
+          const summary  = [
             `Business: ${state.user.businessName} (${state.user.businessType})`,
             `GSpace Consolidation Score: ${score?.total ?? 0}/100 (${score?.label ?? ""})`,
             `Tools Identified: ${toolList}`,
@@ -348,6 +353,7 @@ export default function AuditPage() {
             freeIntakeAnswers:   state.audit.freeIntakeAnswers,
             paid29IntakeAnswers: state.audit.paid29IntakeAnswers,
             freeReportContent:   state.audit.freeReportSummary,
+            freeAnalysisData:    state.audit.freeAnalysisData,
           }),
         });
         if (!res.ok) {

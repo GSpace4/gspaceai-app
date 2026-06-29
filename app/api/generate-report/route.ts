@@ -12,6 +12,7 @@ import { upsertSession, saveReport, logError } from "@/src/lib/db";
 import type {
   AuditState, UserProfile, QuestionnaireAnswer, AuditAnswer,
   SoftwareInventoryItem, ConsolidationOpportunity, AutomationOpportunity,
+  FreeAnalysisData,
 } from "@/src/lib/types";
 
 export const runtime = "nodejs";
@@ -22,12 +23,13 @@ type GenerateReportBody = {
   auditState: AuditState;
   user: UserProfile;
   sessionId?: string;
-  // v2.0 context fields — appended to auditState.answers before Gemini sees them
+  // v2.0 context fields
   freeIntakeAnswers?: QuestionnaireAnswer[];
   paid29IntakeAnswers?: QuestionnaireAnswer[];
   paid79ChatAnswers?: Array<{ question: string; answer: string }>;
   freeReportContent?: string;
   paid29ReportContent?: string;
+  freeAnalysisData?: FreeAnalysisData | null;
 };
 
 // ------------------------------------------------------------
@@ -263,10 +265,11 @@ export async function POST(req: NextRequest) {
     if (reportType === "platform_consolidation_snapshot") {
       // Step 1: run Gemini analysis on intake answers to populate structured AuditState fields
       let enriched = buildEnrichedAuditState(auditState, body);
+      let capturedAnalysis: IntakeAnalysis | null = null;
       if (body.freeIntakeAnswers?.length) {
-        const analysis = await analyzeIntakeAnswers(body.freeIntakeAnswers);
-        if (analysis) {
-          enriched = buildAuditStateFromAnalysis(enriched, analysis);
+        capturedAnalysis = await analyzeIntakeAnswers(body.freeIntakeAnswers);
+        if (capturedAnalysis) {
+          enriched = buildAuditStateFromAnalysis(enriched, capturedAnalysis);
         }
       }
 
@@ -305,29 +308,131 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Build FreeAnalysisData to return to client as single source of truth
+      const freeAnalysisData: FreeAnalysisData | null = capturedAnalysis ? {
+        softwareInventory:               enriched.softwareInventory,
+        gspaceConsolidationScore:        enriched.gspaceConsolidationScore,
+        scoringInputs:                   capturedAnalysis.scoringInputs,
+        estimatedMonthlySoftwareSpend:   enriched.estimatedMonthlySoftwareSpend,
+        estimatedReplaceableMonthlySpend: enriched.estimatedReplaceableMonthlySpend,
+        estimatedAnnualSavings:          enriched.estimatedAnnualSavings,
+        consolidationOpportunities:      capturedAnalysis.consolidationOpportunities ?? [],
+        automationOpportunities:         capturedAnalysis.automationOpportunities ?? [],
+        enhancementOpportunities:        capturedAnalysis.enhancementOpportunities ?? [],
+        bottlenecks:                     capturedAnalysis.bottlenecks ?? [],
+        manualTasks:                     capturedAnalysis.manualTasks ?? [],
+        primaryFinding:                  capturedAnalysis.primaryFinding ?? "",
+        businessType:                    capturedAnalysis.businessType ?? "",
+        currentGWUsage:                  capturedAnalysis.currentGWUsage ?? "",
+      } : null;
+
       return NextResponse.json({
         success: true,
         reportType,
         pdfBase64: pdfBuffer.toString("base64"),
         reportData,
+        analysisData: freeAnalysisData,
       });
     }
 
     // ---- Recommendations Report ($29) ----
     if (reportType === "recommendations_report") {
-      const enriched   = buildEnrichedAuditState(auditState, body);
-      const reportData = await buildRecommendationsReportData(enriched, user);
-      const pdfBuffer = await generateRecommendationsReportPDF(reportData);
+      const fad = body.freeAnalysisData;
+
+      // Start with the base enrichment (paid29IntakeAnswers in answers[])
+      let enriched = buildEnrichedAuditState(auditState, body);
+
+      // If freeAnalysisData is available, use it as the authoritative source
+      // for software inventory, score, and spend — so Snapshot and Recommendations
+      // Report always show the same tools and the same score.
+      if (fad) {
+        const consolidationOpps: ConsolidationOpportunity[] = fad.consolidationOpportunities.map(title => ({
+          title,
+          currentTool: "External tool",
+          googleWorkspaceReplacement: "Google Workspace",
+          complexity: "Medium" as const,
+          priority: "Medium" as const,
+        }));
+        const automationOpps: AutomationOpportunity[] = fad.automationOpportunities.map(title => ({
+          title,
+          description: title,
+          toolSuggested: "Google Apps Script",
+          complexity: "Medium" as const,
+        }));
+        enriched = {
+          ...enriched,
+          softwareInventory:                fad.softwareInventory,
+          consolidationOpportunities:       consolidationOpps,
+          automationOpportunities:          automationOpps,
+          bottlenecks:                      fad.bottlenecks,
+          manualTasks:                      fad.manualTasks,
+          googleWorkspaceOpportunities:     [],
+          estimatedMonthlySoftwareSpend:    fad.estimatedMonthlySoftwareSpend,
+          estimatedReplaceableMonthlySpend: fad.estimatedReplaceableMonthlySpend,
+          estimatedAnnualSavings:           fad.estimatedAnnualSavings,
+          gspaceConsolidationScore:         fad.gspaceConsolidationScore,
+          scoreLabel:                       getScoreLabel(fad.gspaceConsolidationScore),
+        };
+
+        // Prepend a structured context entry so Gemini generates report sections
+        // from real tools — not invented ones.
+        const toolLines = fad.softwareInventory
+          .map(t => `  - ${t.name} (${t.category}) $${t.estimatedMonthlyCost ?? 0}/mo — ${t.recommendedAction}`)
+          .join("\n");
+        const contextEntry: AuditAnswer = {
+          question: "STRUCTURED CONTEXT FROM PLATFORM CONSOLIDATION SNAPSHOT",
+          answer: [
+            `Software inventory:\n${toolLines}`,
+            `GSpace Consolidation Score: ${fad.gspaceConsolidationScore}/100`,
+            `Primary finding: ${fad.primaryFinding}`,
+            `Consolidation opportunities: ${fad.consolidationOpportunities.join("; ")}`,
+            `Automation opportunities: ${fad.automationOpportunities.join("; ")}`,
+            `Monthly software spend: $${fad.estimatedMonthlySoftwareSpend}`,
+            `Replaceable spend: $${fad.estimatedReplaceableMonthlySpend}`,
+            "",
+            "Generate the Recommendations Report based on the ACTUAL tools identified above.",
+            "Do not invent or hypothesize tools. Only analyze tools from the software inventory.",
+            "Every platform in the Software Stack Review table must come from the identified inventory.",
+          ].join("\n"),
+          timestamp: new Date().toISOString(),
+        };
+        enriched = { ...enriched, answers: [contextEntry, ...enriched.answers] };
+      }
+
+      const rawReportData = await buildRecommendationsReportData(enriched, user);
+
+      // Fix 3: override Executive Snapshot metrics with freeAnalysisData values
+      // so the score and tool count in the Recommendations Report exactly match the Snapshot.
+      const reportData = fad ? {
+        ...rawReportData,
+        softwareInventory:            fad.softwareInventory,
+        estimatedMonthlySoftwareSpend: fad.estimatedMonthlySoftwareSpend,
+        estimatedAnnualSavings:        fad.estimatedAnnualSavings,
+        savings: {
+          ...(rawReportData as Record<string, unknown>).savings as object,
+          estimatedAnnualSavings:           fad.estimatedAnnualSavings,
+          estimatedMonthlySoftwareSpend:    fad.estimatedMonthlySoftwareSpend,
+          estimatedReplaceableMonthlySpend: fad.estimatedReplaceableMonthlySpend,
+        },
+        scoreBreakdown: {
+          ...(rawReportData as Record<string, unknown>).scoreBreakdown as object,
+          total: fad.gspaceConsolidationScore,
+        },
+      } : rawReportData;
+
+      const pdfBuffer = await generateRecommendationsReportPDF(
+        reportData as Parameters<typeof generateRecommendationsReportPDF>[0]
+      );
 
       if (sessionId) {
         try {
           await Promise.all([
             upsertSession(sessionId, {
               stage: "recommendations_report_ready",
-              consolidationScore: auditState.gspaceConsolidationScore,
-              scoreLabel: auditState.scoreLabel,
-              estimatedAnnualSavings: auditState.estimatedAnnualSavings,
-              auditData: auditState,
+              consolidationScore: fad?.gspaceConsolidationScore ?? auditState.gspaceConsolidationScore,
+              scoreLabel: fad ? getScoreLabel(fad.gspaceConsolidationScore) : auditState.scoreLabel,
+              estimatedAnnualSavings: fad?.estimatedAnnualSavings ?? auditState.estimatedAnnualSavings,
+              auditData: enriched,
             }),
             saveReport(sessionId, reportType, pdfBuffer, reportData),
           ]);

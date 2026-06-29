@@ -34,6 +34,7 @@ import type {
   ConsolidationScoreLabel,
   GeneratedQuestion,
   QuestionnaireAnswer,
+  FreeAnalysisData,
 } from "@/lib/types";
 import { canTransition } from "@/lib/workflowState";
 import { saveState, loadState } from "@/lib/persistence";
@@ -84,6 +85,7 @@ export function getInitialState(): AppState {
       paid29IntakeAnswers: [],
       paid79ChatAnswers: [],
       freeReportSummary: "",
+      freeAnalysisData: null,
       currentQuestionIndex: 0,
     },
     messages: [],
@@ -124,6 +126,7 @@ export type AppAction =
   | { type: "SET_PAID29_INTAKE_ANSWERS"; answers: QuestionnaireAnswer[] }
   | { type: "SET_PAID79_CHAT_ANSWERS"; answers: Array<{ question: string; answer: string }> }
   | { type: "SET_FREE_REPORT_SUMMARY"; summary: string }
+  | { type: "SET_FREE_ANALYSIS_DATA"; data: FreeAnalysisData }
   | { type: "SET_CURRENT_QUESTION_INDEX"; index: number };
 
 // ------------------------------------------------------------
@@ -289,6 +292,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case "SET_FREE_REPORT_SUMMARY": {
       return { ...state, audit: { ...state.audit, freeReportSummary: action.summary } };
+    }
+
+    case "SET_FREE_ANALYSIS_DATA": {
+      return { ...state, audit: { ...state.audit, freeAnalysisData: action.data } };
     }
 
     case "SET_CURRENT_QUESTION_INDEX": {

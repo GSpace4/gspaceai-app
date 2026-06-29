@@ -108,6 +108,31 @@ export type GeneratedQuestionSet = {
   questions: GeneratedQuestion[];
 };
 
+// Structured output from the Gemini intake analysis step.
+// Single source of truth carried into all subsequent tiers.
+export type FreeAnalysisData = {
+  softwareInventory: SoftwareInventoryItem[];
+  gspaceConsolidationScore: number;
+  scoringInputs: {
+    softwareCount: number;
+    hasHighReplacementTools: boolean;
+    gwUnderutilization: number;
+    manualTaskCount: number;
+    processFragmentation: number;
+  };
+  estimatedMonthlySoftwareSpend: number;
+  estimatedReplaceableMonthlySpend: number;
+  estimatedAnnualSavings: number;
+  consolidationOpportunities: string[];
+  automationOpportunities: string[];
+  enhancementOpportunities: string[];
+  bottlenecks: string[];
+  manualTasks: string[];
+  primaryFinding: string;
+  businessType: string;
+  currentGWUsage: string;
+};
+
 // ------------------------------------------------------------
 // Audit State
 // ------------------------------------------------------------
@@ -166,6 +191,7 @@ export type AuditState = {
   paid29IntakeAnswers: QuestionnaireAnswer[];
   paid79ChatAnswers: Array<{ question: string; answer: string }>;
   freeReportSummary: string;
+  freeAnalysisData: FreeAnalysisData | null;
   currentQuestionIndex: number;
 };
 
