@@ -680,14 +680,43 @@ export default function AuditPage() {
             </div>
           )}
 
-          {/* Free tier questionnaire */}
+          {/* Free tier questionnaire — Q1-Q5 hardcoded, Q6-Q10 fetched after Q5 */}
           {showFreeQuestionnaire && (
             <QuestionnaireStep
               questions={state.audit.freeQuestions}
               isLoading={freeQuestionsLoading || stage === "free_questionnaire_loading"}
               tierLabel="Free Audit"
+              totalQuestions={10}
+              fetchMoreAfterIndex={4}
               initialIndex={stage === "free_questionnaire_active" ? state.audit.currentQuestionIndex : 0}
               initialAnswers={state.audit.freeIntakeAnswers}
+              onAnswered={(questionId, answer) => {
+                // Persist current question index for page-refresh resume
+                dispatch({ type: "SET_CURRENT_QUESTION_INDEX", index: state.audit.currentQuestionIndex + 1 });
+                // Store name from Q4, business name from Q5
+                if (questionId === "hq4" && answer.selectedOptions[0]) {
+                  dispatch({ type: "SET_USER", user: { name: answer.selectedOptions[0] } });
+                }
+                if (questionId === "hq5" && answer.selectedOptions[0]) {
+                  dispatch({ type: "SET_USER", user: { businessName: answer.selectedOptions[0] } });
+                }
+              }}
+              onFetchMore={async (answeredSoFar: QuestionnaireAnswer[]) => {
+                const res = await fetch("/api/generate-questions", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    tier: "free",
+                    questionCount: 5,
+                    priorContext: { fixedAnswers: answeredSoFar },
+                  }),
+                });
+                const data = await res.json();
+                if (!data.questions?.length) throw new Error("No questions returned for Q6-10");
+                // Store all 10 answers (Q1-5 from hardcoded + Q6-10 from Gemini) for later report context
+                dispatch({ type: "SET_FREE_QUESTIONS", questions: [...state.audit.freeQuestions, ...data.questions] });
+                return data.questions;
+              }}
               onComplete={(answers: QuestionnaireAnswer[]) => {
                 dispatch({ type: "SET_FREE_INTAKE_ANSWERS", answers });
                 dispatch({ type: "SET_CURRENT_QUESTION_INDEX", index: 0 });

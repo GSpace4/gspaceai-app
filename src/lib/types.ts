@@ -92,8 +92,9 @@ export type QuestionOption = {
 export type GeneratedQuestion = {
   id: string;
   question: string;
-  type: "single_select" | "multi_select";
-  options: QuestionOption[];
+  type: "single_select" | "multi_select" | "text_input";
+  options: QuestionOption[]; // empty array for text_input
+  placeholder?: string;      // hint text for text_input
 };
 
 export type QuestionnaireAnswer = {

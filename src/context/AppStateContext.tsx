@@ -37,6 +37,7 @@ import type {
 } from "@/lib/types";
 import { canTransition } from "@/lib/workflowState";
 import { saveState, loadState } from "@/lib/persistence";
+import { HARDCODED_QUESTIONS } from "@/lib/hardcodedQuestions";
 
 // ------------------------------------------------------------
 // Initial State
@@ -49,7 +50,7 @@ function makePaymentRecord(): PaymentRecord {
 export function getInitialState(): AppState {
   return {
     sessionId: crypto.randomUUID(),
-    stage: "intro",
+    stage: "free_questionnaire_active",
     user: {
       name: "",
       email: "",
@@ -76,8 +77,8 @@ export function getInitialState(): AppState {
       estimatedReplaceableMonthlySpend: 0,
       estimatedAnnualSavings: 0,
       auditComplete: false,
-      // v2.0 questionnaire fields
-      freeQuestions: [],
+      // v2.0 questionnaire fields — hardcoded Q1-Q5 pre-loaded so Q1 shows immediately
+      freeQuestions: HARDCODED_QUESTIONS,
       paid29Questions: [],
       freeIntakeAnswers: [],
       paid29IntakeAnswers: [],
@@ -244,7 +245,21 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     case "HYDRATE_FROM_STORAGE": {
-      return action.savedState;
+      const s = action.savedState;
+      // Migrate old sessions that were stuck at pre-questionnaire intro stages
+      const legacyIntroStages = ["intro", "collect_name", "collect_business_basics", "audit_in_progress", "audit_wrap_up"];
+      if (legacyIntroStages.includes(s.stage)) {
+        return {
+          ...s,
+          stage: "free_questionnaire_active" as WorkflowStage,
+          audit: {
+            ...s.audit,
+            freeQuestions: s.audit.freeQuestions?.length ? s.audit.freeQuestions : HARDCODED_QUESTIONS,
+            currentQuestionIndex: 0,
+          },
+        };
+      }
+      return s;
     }
 
     case "RESET_SESSION": {

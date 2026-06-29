@@ -15,10 +15,12 @@ export const maxDuration = 60;
 
 type RequestBody = {
   tier: "free" | "paid_29";
+  questionCount?: number; // default 7 for backward compat; pass 5 for free tier Q6-10 call
   priorContext?: {
     freeIntakeAnswers?: QuestionnaireAnswer[];
     freeReportSummary?: string;
     paid29IntakeAnswers?: QuestionnaireAnswer[];
+    fixedAnswers?: QuestionnaireAnswer[]; // Q1-Q5 answers for free tier Q6-10 generation
   };
 };
 
@@ -50,14 +52,15 @@ function formatAnswers(answers: QuestionnaireAnswer[]): string {
 // ------------------------------------------------------------
 // Validation
 // ------------------------------------------------------------
-function validateQuestions(questions: unknown[]): questions is GeneratedQuestion[] {
-  if (!Array.isArray(questions) || questions.length !== 7) return false;
+function validateQuestions(questions: unknown[], expectedCount: number): questions is GeneratedQuestion[] {
+  if (!Array.isArray(questions) || questions.length !== expectedCount) return false;
   for (const q of questions) {
     if (typeof q !== "object" || q === null) return false;
     const question = q as Record<string, unknown>;
     if (typeof question.id !== "string") return false;
     if (typeof question.question !== "string") return false;
     if (question.question.length > 120) return false;
+    // Gemini only generates single_select or multi_select (text_input is hardcoded only)
     if (question.type !== "single_select" && question.type !== "multi_select") return false;
     if (!Array.isArray(question.options)) return false;
     if (question.options.length < 3 || question.options.length > 5) return false;
@@ -77,7 +80,8 @@ function validateQuestions(questions: unknown[]): questions is GeneratedQuestion
 // ------------------------------------------------------------
 async function generateQuestions(
   tier: "free" | "paid_29",
-  priorContext: RequestBody["priorContext"]
+  priorContext: RequestBody["priorContext"],
+  questionCount = 7
 ): Promise<GeneratedQuestion[]> {
   const apiKey = process.env.GEMINI_API_KEY ?? "";
   if (!apiKey || apiKey === "PASTE_GEMINI_API_KEY_HERE") {
@@ -92,7 +96,7 @@ Your job is to generate a focused intake questionnaire for a small business owne
 You will return ONLY valid JSON — no markdown, no preamble, no explanation.
 
 Question generation rules:
-- Generate exactly 7 questions
+- Generate exactly the number of questions requested
 - Each question must be answerable with a tap — no typing
 - Question text: maximum 120 characters
 - Option labels: maximum 60 characters each
@@ -121,8 +125,8 @@ Return this exact JSON structure and nothing else:
   });
 
   const userPrompt = tier === "free"
-    ? buildFreePrompt()
-    : buildPaid29Prompt(priorContext);
+    ? buildFreePrompt(priorContext?.fixedAnswers ?? [], questionCount)
+    : buildPaid29Prompt(priorContext, questionCount);
 
   for (let attempt = 0; attempt <= 1; attempt++) {
     const result = await model.generateContent(userPrompt);
@@ -130,10 +134,9 @@ Return this exact JSON structure and nothing else:
     try {
       const jsonStr = extractJSON(raw);
       const parsed = JSON.parse(jsonStr) as GeminiQuestionSet;
-      if (validateQuestions(parsed.questions)) {
+      if (validateQuestions(parsed.questions, questionCount)) {
         return parsed.questions;
       }
-      // Validation failed — log and retry once
       console.warn(`[generate-questions] Validation failed on attempt ${attempt + 1}:`, parsed);
     } catch (err) {
       console.warn(`[generate-questions] JSON parse failed on attempt ${attempt + 1}:`, err);
@@ -143,22 +146,41 @@ Return this exact JSON structure and nothing else:
   throw new Error("Gemini returned invalid question structure after 2 attempts.");
 }
 
-function buildFreePrompt(): string {
-  return `Generate 7 intake questions for a small business owner starting a free Google Workspace consolidation audit.
+function buildFreePrompt(fixedAnswers: QuestionnaireAnswer[], questionCount: number): string {
+  if (!fixedAnswers.length) {
+    // Fallback for direct calls without fixed answers (backward compat)
+    return `Generate ${questionCount} intake questions for a small business owner starting a free Google Workspace consolidation audit. Focus on discovering their tools, workflows, and biggest operational pain points. Questions must be tap-based (single_select or multi_select only). 3 to 5 options each.`;
+  }
 
-Focus on discovering:
-1. Type of service business they run
-2. How many software tools they pay for
-3. Which specific tools they currently use
-4. Whether and how they use Google Workspace
-5. Team size and structure
-6. Where their biggest operational time drains are
-7. What type of business outcome they value most
+  // Find specific answers from Q1-Q5 by position
+  const q1 = fixedAnswers[0];
+  const q2 = fixedAnswers[1];
+  const q3 = fixedAnswers[2];
+  const q4 = fixedAnswers[3];
+  const q5 = fixedAnswers[4];
 
-No prior context exists. Generate smart, broadly applicable questions that will give enough data to produce a meaningful Platform Consolidation Snapshot.`;
+  return `Generate ${questionCount} intake questions for a small business owner.
+
+Context already collected:
+- Business type: ${q1?.selectedOptions.join(", ") ?? "Unknown"}
+- Business category: ${q2?.selectedOptions.join(", ") ?? "Unknown"}
+- Tools currently in use: ${q3?.selectedOptions.join(", ") ?? "None listed"}
+- First name: ${q4?.selectedOptions.join(", ") ?? "Unknown"}
+- Business name: ${q5?.selectedOptions.join(", ") ?? "Unknown"}
+
+You already know their business type, category, tool stack, and name.
+Do not ask about any of these again.
+
+Generate ${questionCount} questions that fill the remaining gaps needed to produce a valuable Platform Consolidation Snapshot. Focus on:
+- How they currently manage leads or customers
+- Where their biggest time drains or manual bottlenecks are
+- How they handle scheduling, reporting, or team communication
+- What a successful outcome would look like for them
+
+Questions must be tap-based (single_select or multi_select only — no text_input). 3 to 5 options each. Max 120 characters per question. Max 60 characters per option label.`;
 }
 
-function buildPaid29Prompt(priorContext: RequestBody["priorContext"]): string {
+function buildPaid29Prompt(priorContext: RequestBody["priorContext"], questionCount: number): string {
   const answersText = priorContext?.freeIntakeAnswers?.length
     ? formatAnswers(priorContext.freeIntakeAnswers)
     : "No prior answers available.";
@@ -167,7 +189,7 @@ function buildPaid29Prompt(priorContext: RequestBody["priorContext"]): string {
     ? priorContext.freeReportSummary
     : "No summary available.";
 
-  return `Generate 7 intake questions for a small business owner who has completed their free audit and paid for the Recommendations Report.
+  return `Generate ${questionCount} intake questions for a small business owner who has completed their free audit and paid for the Recommendations Report.
 
 Prior context from free audit:
 ${answersText}
@@ -196,7 +218,7 @@ export async function POST(req: NextRequest) {
 
   try {
     body = (await req.json()) as RequestBody;
-    const { tier, priorContext } = body;
+    const { tier, priorContext, questionCount = 7 } = body;
 
     if (tier !== "free" && tier !== "paid_29") {
       return NextResponse.json(
@@ -205,7 +227,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const questions = await generateQuestions(tier, priorContext);
+    const questions = await generateQuestions(tier, priorContext, questionCount);
     return NextResponse.json({ questions });
 
   } catch (err) {
