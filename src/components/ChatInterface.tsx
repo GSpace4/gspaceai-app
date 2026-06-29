@@ -59,10 +59,14 @@ export default function ChatInterface({ systemContextOverride }: { systemContext
 
     if (messages.length > 0) return;   // restored session — don't add intro again
 
+    // For $79 intake, the opening message is generated externally via the
+    // paid_79 opening effect in AuditPage — skip the standard intro entirely
+    if (systemContextOverride) return;
+
     const introMsg = makeMessage("assistant", APP_COPY.introMessage);
     dispatch({ type: "ADD_MESSAGE", message: introMsg });
     transition("collect_name");
-  }, [isHydrated, messages.length, dispatch, transition]);
+  }, [isHydrated, messages.length, dispatch, transition, systemContextOverride]);
 
   // ------------------------------------------------------------
   // Apply extracted data and determine stage transitions

@@ -33,7 +33,8 @@ async function callGeminiAuditWithContext(
   const genAI   = new GoogleGenerativeAI(apiKey);
   const model   = genAI.getGenerativeModel({
     model:             process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
-    systemInstruction: systemContextOverride + "\n\n" + AUDIT_SYSTEM_PROMPT,
+    // Override replaces the standard prompt entirely — not appended
+    systemInstruction: systemContextOverride,
   });
 
   const history = messages.slice(0, -1).map(m => ({

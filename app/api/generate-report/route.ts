@@ -396,7 +396,13 @@ export async function POST(req: NextRequest) {
           ].join("\n"),
           timestamp: new Date().toISOString(),
         };
-        enriched = { ...enriched, answers: [contextEntry, ...enriched.answers] };
+        // Score lock: instruct Gemini to use the exact score, not recalculate
+        const scoreLockEntry: AuditAnswer = {
+          question: "SCORE LOCK INSTRUCTION",
+          answer:   `The GSpace Consolidation Score for this business is exactly ${fad.gspaceConsolidationScore}/100. Use this exact number when referencing the score in the Primary Finding and Executive Summary narrative. Do not calculate or infer a different score. Use ${fad.gspaceConsolidationScore} exactly.`,
+          timestamp: new Date().toISOString(),
+        };
+        enriched = { ...enriched, answers: [contextEntry, scoreLockEntry, ...enriched.answers] };
       }
 
       const rawReportData = await buildRecommendationsReportData(enriched, user);

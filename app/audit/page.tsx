@@ -11,9 +11,66 @@ import PaymentVerificationModal from "@/src/components/PaymentVerificationModal"
 import QuestionnaireStep from "@/src/components/QuestionnaireStep";
 import { isAuditStage } from "@/src/lib/workflowState";
 import type { FreeReportData } from "@/src/lib/reportGeneration";
-import type { PaymentsState, AuditState, QuestionnaireAnswer } from "@/src/lib/types";
+import type { PaymentsState, AuditState, QuestionnaireAnswer, ChatMessage, UserProfile } from "@/src/lib/types";
 import { calculateImpact } from "@/src/lib/scoring";
 import { estimateSavings } from "@/src/lib/savingsEstimator";
+
+// ============================================================
+// Build $79 chat system context from all accumulated state.
+// Uses freeAnalysisData as the authoritative source for tools,
+// score, and primary finding. Instructs Gemini not to ask for
+// anything already known.
+// ============================================================
+function buildPaid79SystemContext(audit: AuditState, user: UserProfile): string {
+  const freeAnswers = audit.freeIntakeAnswers
+    .map(a => `Q: ${a.question}\nA: ${a.selectedOptions.join(", ")}`)
+    .join("\n\n");
+
+  const paid29Answers = audit.paid29IntakeAnswers
+    .map(a => `Q: ${a.question}\nA: ${a.selectedOptions.join(", ")}`)
+    .join("\n\n");
+
+  const inventory = audit.freeAnalysisData?.softwareInventory
+    .map(t => `- ${t.name} ($${t.estimatedMonthlyCost ?? 0}/mo) — ${t.recommendedAction}`)
+    .join("\n") ?? "No tools identified";
+
+  return `You are GSpaceAi conducting the final intake for the Implementation Guide + SOP Book.
+
+YOU ALREADY KNOW THIS BUSINESS COMPLETELY. Do not ask for name, business name, business type, or any tool they use. You have all of that.
+
+Business: ${user.businessName}
+Owner: ${user.name}
+Business type: ${audit.freeAnalysisData?.businessType ?? ""}
+GSpace Consolidation Score: ${audit.freeAnalysisData?.gspaceConsolidationScore ?? 0}/100
+
+SOFTWARE INVENTORY:
+${inventory}
+
+PRIMARY FINDING FROM AUDIT:
+${audit.freeAnalysisData?.primaryFinding ?? ""}
+
+FREE AUDIT QUESTIONNAIRE (10 questions):
+${freeAnswers}
+
+RECOMMENDATIONS QUESTIONNAIRE (7 questions):
+${paid29Answers}
+
+YOUR MISSION:
+Ask 7 to 10 highly specific, implementation-focused questions about ${user.businessName}. Every question must be specific to their actual tools, workflows, and business type identified above — not generic.
+
+Focus on what you still need to build a practical, actionable Implementation Guide:
+1. Which of the identified opportunities they want to tackle first
+2. Their current Google Workspace plan and setup level
+3. Their technical comfort level and whether they have any staff who manage software
+4. Specific workflow details for their highest-priority consolidation
+5. Timeline — are they looking to implement over weeks or months
+6. Any constraints: budget for setup time, team resistance, existing automations
+7. What a successful implementation looks like for them personally
+
+Ask one question at a time. Be direct and consultant-like. Use their name occasionally. Reference their actual tools and business by name. When you have enough to build a complete implementation guide, tell them you have everything you need and are generating their guide now. Then set confirmedReady: true in your extractedData JSON response.
+
+Do not re-ask anything already answered above.`;
+}
 
 // Inline display card for the Recommendations Report
 function ImpactCardColor({ color }: { color: "green" | "blue" | "yellow" }) {
@@ -595,38 +652,47 @@ export default function AuditPage() {
     "paid_29_questionnaire_loading", "paid_29_questionnaire_active", "paid_29_questionnaire_complete",
   ].includes(stage);
 
-  // v2.0: system context for $79 chat intake — built from all prior context
+  // v2.0: system context for $79 chat intake — full structured context using freeAnalysisData
   const paid79SystemContext = useMemo(() => {
     if (stage !== "paid_79_chat_active" && stage !== "paid_79_chat_complete") return undefined;
+    return buildPaid79SystemContext(state.audit, state.user);
+  }, [stage, state.audit, state.user]);
 
-    const formatAnswers = (answers: QuestionnaireAnswer[]) =>
-      answers.map((a, i) => `Q${i + 1}: ${a.question}\nA: ${a.selectedOptions.join(", ")}`).join("\n\n");
+  // v2.0: generate opening message when $79 chat first mounts (messages empty)
+  const paid79OpeningTriggered = useRef(false);
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (stage !== "paid_79_chat_active") return;
+    if (state.messages.length > 0) return;
+    if (paid79OpeningTriggered.current) return;
+    if (!paid79SystemContext) return;
+    paid79OpeningTriggered.current = true;
 
-    return [
-      "You are GSpaceAi conducting the final intake before generating the Implementation Guide + SOP Book.",
-      "The customer has completed two prior intake stages and you have full context on their business.",
-      "",
-      "Prior context from free audit:",
-      formatAnswers(state.audit.freeIntakeAnswers),
-      "",
-      "Prior context from recommendations intake:",
-      formatAnswers(state.audit.paid29IntakeAnswers),
-      "",
-      state.audit.freeReportSummary ? `Free audit findings:\n${state.audit.freeReportSummary}` : "",
-      recReportData?.executiveSummary ? `Recommendations report summary:\n${recReportData.executiveSummary}` : "",
-      "",
-      "Your job is to ask FEWER THAN 10 questions total. Focus only on what you still need to know",
-      "to generate a practical, business-specific implementation guide. Ask about:",
-      "- Which 1-2 systems they most want to build first",
-      "- Their comfort level with Google Workspace tools",
-      "- Any specific technical constraints or team limitations",
-      "- Timeline and priority preferences",
-      "",
-      "Do not re-ask anything already answered. Be direct and efficient.",
-      "When you have enough information, set confirmedReady: true in your extractedData.",
-    ].filter(Boolean).join("\n");
-  }, [stage, state.audit.freeIntakeAnswers, state.audit.paid29IntakeAnswers,
-      state.audit.freeReportSummary, recReportData]);
+    fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages:              [],
+        userMessage:           "Please begin the implementation intake interview.",
+        stage:                 "paid_79_chat_active",
+        sessionId:             state.sessionId,
+        systemContextOverride: paid79SystemContext,
+      }),
+    })
+      .then(r => r.json())
+      .then((data: { customerResponse?: string }) => {
+        if (data.customerResponse) {
+          const msg: ChatMessage = {
+            id:        Math.random().toString(36).slice(2),
+            role:      "assistant",
+            content:   data.customerResponse,
+            timestamp: new Date().toISOString(),
+          };
+          dispatch({ type: "ADD_MESSAGE", message: msg });
+        }
+      })
+      .catch(err => console.error("[AuditPage] $79 opening message error:", err));
+  }, [isHydrated, stage, state.messages.length, state.sessionId, paid79SystemContext, dispatch]);
 
   // Free report display
   const showGenerating = stage === "free_report_generating";
