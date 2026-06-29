@@ -5,12 +5,61 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { callGeminiAudit } from "@/src/lib/aiAuditLogic";
+import { callGeminiAudit, AUDIT_SYSTEM_PROMPT } from "@/src/lib/aiAuditLogic";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { upsertSession } from "@/src/lib/db";
-import type { ChatMessage } from "@/src/lib/types";
+import type { ChatMessage, GeminiDualResponse } from "@/src/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+// ------------------------------------------------------------
+// callGeminiAuditWithContext
+// Used only for $79 chat intake. Prepends systemContextOverride
+// (full prior context) to the standard AUDIT_SYSTEM_PROMPT so
+// Gemini has all free + $29 answers and both report summaries.
+// Mirrors the retry + parse logic from callGeminiAudit without
+// modifying aiAuditLogic.ts.
+// ------------------------------------------------------------
+async function callGeminiAuditWithContext(
+  messages: ChatMessage[],
+  userMessage: string,
+  systemContextOverride: string,
+  stage?: string
+): Promise<GeminiDualResponse> {
+  const apiKey = process.env.GEMINI_API_KEY ?? "";
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured.");
+
+  const genAI   = new GoogleGenerativeAI(apiKey);
+  const model   = genAI.getGenerativeModel({
+    model:             process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+    systemInstruction: systemContextOverride + "\n\n" + AUDIT_SYSTEM_PROMPT,
+  });
+
+  const history = messages.slice(0, -1).map(m => ({
+    role:  m.role === "user" ? "user" : "model",
+    parts: [{ text: m.content }],
+  }));
+
+  const chat   = model.startChat({ history });
+  const result = await chat.sendMessage(userMessage);
+  const raw    = result.response.text();
+
+  // Minimal JSON extraction — extract first JSON object from the response
+  const start = raw.indexOf("{");
+  const end   = raw.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try {
+      const parsed = JSON.parse(raw.slice(start, end + 1)) as GeminiDualResponse;
+      if (typeof parsed.customerResponse === "string") {
+        return { customerResponse: parsed.customerResponse, extractedData: parsed.extractedData ?? {} };
+      }
+    } catch { /* fall through to plain text */ }
+  }
+
+  // Fallback: treat entire response as plain text reply
+  return { customerResponse: raw.trim(), extractedData: {} };
+}
 
 type ChatRequestBody = {
   messages: ChatMessage[];
@@ -19,12 +68,14 @@ type ChatRequestBody = {
   sessionId?: string;
   isFirstMessage?: boolean;
   hadBusinessName?: boolean;
+  // v2.0: prepended to system prompt for $79 chat intake — provides full prior context
+  systemContextOverride?: string;
 };
 
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as ChatRequestBody;
-    const { messages, userMessage, stage, sessionId, isFirstMessage, hadBusinessName } = body;
+    const { messages, userMessage, stage, sessionId, isFirstMessage, hadBusinessName, systemContextOverride } = body;
 
     if (!userMessage?.trim()) {
       return NextResponse.json(
@@ -38,7 +89,15 @@ export async function POST(req: NextRequest) {
       upsertSession(sessionId, { stage: "audit_in_progress" }).catch(() => {});
     }
 
-    const response = await callGeminiAudit(messages, userMessage.trim(), stage);
+    // When systemContextOverride is provided ($79 intake), prepend it to the
+    // standard audit system prompt so Gemini has full prior context.
+    // Otherwise use the standard callGeminiAudit path unchanged.
+    let response: GeminiDualResponse;
+    if (systemContextOverride) {
+      response = await callGeminiAuditWithContext(messages, userMessage.trim(), systemContextOverride, stage);
+    } else {
+      response = await callGeminiAudit(messages, userMessage.trim(), stage);
+    }
 
     if (sessionId) {
       const profile = response.extractedData?.userProfile as {
