@@ -232,6 +232,14 @@ export default function AuditPage() {
     if (!isHydrated) return;
     if (stage !== "free_report_generating") return;
     if (generationTriggered.current) return;
+
+    // Guard: all 10 questionnaire answers must be present before calling the API.
+    // If answers haven't flushed to state yet, wait for the next render cycle.
+    if (state.audit.freeIntakeAnswers.length < 10) {
+      console.warn("[AuditPage] Waiting for all 10 answers before generating report. Current:", state.audit.freeIntakeAnswers.length);
+      return;
+    }
+
     generationTriggered.current = true;
 
     async function generate() {
