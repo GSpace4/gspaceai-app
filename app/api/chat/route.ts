@@ -37,7 +37,10 @@ async function callGeminiAuditWithContext(
     systemInstruction: systemContextOverride,
   });
 
-  const history = messages.slice(0, -1).map(m => ({
+  // Cap history to last 6 messages (3 exchanges) to prevent token overflow.
+  // The system context already contains all prior knowledge — sending full
+  // history compounds tokens with each exchange.
+  const history = messages.slice(0, -1).slice(-6).map(m => ({
     role:  m.role === "user" ? "user" : "model",
     parts: [{ text: m.content }],
   }));

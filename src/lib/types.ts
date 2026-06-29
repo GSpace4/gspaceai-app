@@ -131,6 +131,8 @@ export type FreeAnalysisData = {
   primaryFinding: string;
   businessType: string;
   currentGWUsage: string;
+  primaryImpact?: string;
+  secondaryImpact?: string;
 };
 
 // ------------------------------------------------------------

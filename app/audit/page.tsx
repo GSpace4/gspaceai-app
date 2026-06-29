@@ -11,7 +11,7 @@ import PaymentVerificationModal from "@/src/components/PaymentVerificationModal"
 import QuestionnaireStep from "@/src/components/QuestionnaireStep";
 import { isAuditStage } from "@/src/lib/workflowState";
 import type { FreeReportData } from "@/src/lib/reportGeneration";
-import type { PaymentsState, AuditState, QuestionnaireAnswer, ChatMessage, UserProfile } from "@/src/lib/types";
+import type { PaymentsState, AuditState, QuestionnaireAnswer, ChatMessage, UserProfile, FreeAnalysisData } from "@/src/lib/types";
 import { calculateImpact } from "@/src/lib/scoring";
 import { estimateSavings } from "@/src/lib/savingsEstimator";
 
@@ -22,54 +22,46 @@ import { estimateSavings } from "@/src/lib/savingsEstimator";
 // anything already known.
 // ============================================================
 function buildPaid79SystemContext(audit: AuditState, user: UserProfile): string {
+  // Compact format — keeps total prompt under 800 tokens
   const freeAnswers = audit.freeIntakeAnswers
-    .map(a => `Q: ${a.question}\nA: ${a.selectedOptions.join(", ")}`)
-    .join("\n\n");
+    .map(a => `- ${a.question}: ${a.selectedOptions.join(", ")}`)
+    .join("\n");
 
   const paid29Answers = audit.paid29IntakeAnswers
-    .map(a => `Q: ${a.question}\nA: ${a.selectedOptions.join(", ")}`)
-    .join("\n\n");
+    .map(a => `- ${a.question}: ${a.selectedOptions.join(", ")}`)
+    .join("\n");
 
+  // Name + action only — no costs or extra fields
   const inventory = audit.freeAnalysisData?.softwareInventory
-    .map(t => `- ${t.name} ($${t.estimatedMonthlyCost ?? 0}/mo) — ${t.recommendedAction}`)
-    .join("\n") ?? "No tools identified";
+    .map(t => `- ${t.name}: ${t.recommendedAction}`)
+    .join("\n") ?? "";
 
-  return `You are GSpaceAi conducting the final intake for the Implementation Guide + SOP Book.
+  // Top 5 opportunities max
+  const topOpps = [
+    ...(audit.freeAnalysisData?.consolidationOpportunities?.slice(0, 3) ?? []),
+    ...(audit.freeAnalysisData?.automationOpportunities?.slice(0, 2) ?? []),
+  ].join("\n- ");
 
-YOU ALREADY KNOW THIS BUSINESS COMPLETELY. Do not ask for name, business name, business type, or any tool they use. You have all of that.
+  return `You are GSpaceAi. Do not ask for name, business name, or tools — you already have everything below.
 
 Business: ${user.businessName}
 Owner: ${user.name}
-Business type: ${audit.freeAnalysisData?.businessType ?? ""}
-GSpace Consolidation Score: ${audit.freeAnalysisData?.gspaceConsolidationScore ?? 0}/100
+Score: ${audit.freeAnalysisData?.gspaceConsolidationScore ?? 0}/100
+Primary finding: ${audit.freeAnalysisData?.primaryFinding ?? ""}
 
-SOFTWARE INVENTORY:
+Tools:
 ${inventory}
 
-PRIMARY FINDING FROM AUDIT:
-${audit.freeAnalysisData?.primaryFinding ?? ""}
+Top opportunities:
+- ${topOpps}
 
-FREE AUDIT QUESTIONNAIRE (10 questions):
+Free audit answers:
 ${freeAnswers}
 
-RECOMMENDATIONS QUESTIONNAIRE (7 questions):
+Recommendations audit answers:
 ${paid29Answers}
 
-YOUR MISSION:
-Ask 7 to 10 highly specific, implementation-focused questions about ${user.businessName}. Every question must be specific to their actual tools, workflows, and business type identified above — not generic.
-
-Focus on what you still need to build a practical, actionable Implementation Guide:
-1. Which of the identified opportunities they want to tackle first
-2. Their current Google Workspace plan and setup level
-3. Their technical comfort level and whether they have any staff who manage software
-4. Specific workflow details for their highest-priority consolidation
-5. Timeline — are they looking to implement over weeks or months
-6. Any constraints: budget for setup time, team resistance, existing automations
-7. What a successful implementation looks like for them personally
-
-Ask one question at a time. Be direct and consultant-like. Use their name occasionally. Reference their actual tools and business by name. When you have enough to build a complete implementation guide, tell them you have everything you need and are generating their guide now. Then set confirmedReady: true in your extractedData JSON response.
-
-Do not re-ask anything already answered above.`;
+Ask 7–10 implementation-focused questions, one at a time. Reference their actual tools and business by name. When done, say you have everything needed, then set confirmedReady: true in extractedData.`;
 }
 
 // Inline display card for the Recommendations Report
@@ -79,12 +71,12 @@ function ImpactCardColor({ color }: { color: "green" | "blue" | "yellow" }) {
   return "text-brand-blue";
 }
 
-function RecommendationsReportCard({ data, pdfBase64, businessName, generatedAt, audit, onMarkDisplayed }: {
+function RecommendationsReportCard({ data, pdfBase64, businessName, generatedAt, freeAnalysisData, onMarkDisplayed }: {
   data: Record<string, unknown>;
   pdfBase64: string;
   businessName: string;
   generatedAt: string;
-  audit: AuditState;
+  freeAnalysisData: FreeAnalysisData | null;
   onMarkDisplayed: () => void;
 }) {
   // Mark displayed once on mount
@@ -101,9 +93,17 @@ function RecommendationsReportCard({ data, pdfBase64, businessName, generatedAt,
     URL.revokeObjectURL(url);
   }
 
-  const score = data.scoreBreakdown as { total?: number } | undefined;
   const executiveSummary = data.executiveSummary as string | undefined;
-  const { primary, secondary } = calculateImpact(audit, estimateSavings(audit));
+
+  // Use freeAnalysisData as the authoritative source — same data the PDF uses
+  const toolCount    = freeAnalysisData?.softwareInventory?.length ?? 0;
+  const score        = freeAnalysisData?.gspaceConsolidationScore ?? 0;
+  const primaryLabel = freeAnalysisData?.primaryImpact
+    || freeAnalysisData?.consolidationOpportunities?.[0]
+    || "Google Workspace Optimized";
+  const secondaryLabel = freeAnalysisData?.secondaryImpact
+    || freeAnalysisData?.automationOpportunities?.[0]
+    || "";
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-6 space-y-4">
@@ -125,24 +125,24 @@ function RecommendationsReportCard({ data, pdfBase64, businessName, generatedAt,
           </button>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          {score?.total !== undefined && (
-            <div className="bg-brand-light rounded-xl p-3 text-center">
-              <p className="text-2xl font-bold text-brand-blue">{score.total}</p>
-              <p className="text-xs text-brand-dark/50 mt-0.5">Consolidation Score</p>
-            </div>
-          )}
           <div className="bg-brand-light rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-brand-dark">{audit.softwareInventory.length}</p>
+            <p className="text-2xl font-bold text-brand-blue">{score}</p>
+            <p className="text-xs text-brand-dark/50 mt-0.5">Consolidation Score</p>
+          </div>
+          <div className="bg-brand-light rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-brand-dark">{toolCount}</p>
             <p className="text-xs text-brand-dark/50 mt-0.5">Tools Analyzed</p>
           </div>
           <div className="bg-brand-light rounded-xl p-3 text-center">
-            <p className={`text-base font-bold leading-tight ${ImpactCardColor({ color: primary.color })}`}>{primary.label}</p>
+            <p className="text-base font-bold leading-tight text-brand-blue">{primaryLabel}</p>
             <p className="text-xs text-brand-dark/50 mt-0.5">Primary Impact</p>
           </div>
-          <div className="bg-brand-light rounded-xl p-3 text-center">
-            <p className={`text-base font-bold leading-tight ${ImpactCardColor({ color: secondary.color })}`}>{secondary.label}</p>
-            <p className="text-xs text-brand-dark/50 mt-0.5">Secondary Impact</p>
-          </div>
+          {secondaryLabel && (
+            <div className="bg-brand-light rounded-xl p-3 text-center">
+              <p className="text-base font-bold leading-tight text-brand-green">{secondaryLabel}</p>
+              <p className="text-xs text-brand-dark/50 mt-0.5">Secondary Impact</p>
+            </div>
+          )}
         </div>
         {executiveSummary && (
           <div className="bg-brand-blue/5 rounded-xl p-4 border border-brand-blue/10">
@@ -935,7 +935,7 @@ export default function AuditPage() {
                 pdfBase64={recPdfBase64}
                 businessName={state.user.businessName}
                 generatedAt={(recReportData.generatedAt as string) ?? new Date().toISOString()}
-                audit={state.audit}
+                freeAnalysisData={state.audit.freeAnalysisData}
                 onMarkDisplayed={() => dispatch({ type: "SET_DELIVERABLE_STATUS", key: "recommendations_report", status: "displayed" })}
               />
             </div>

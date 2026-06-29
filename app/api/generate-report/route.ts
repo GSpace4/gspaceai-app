@@ -117,6 +117,8 @@ type IntakeAnalysis = {
   bottlenecks: string[];
   manualTasks: string[];
   primaryFinding: string;
+  primaryImpact: string;
+  secondaryImpact: string;
   estimatedMonthlySoftwareSpend: number;
   estimatedReplaceableMonthlySpend: number;
   googleWorkspaceOpportunities: string[];
@@ -174,6 +176,8 @@ Return this exact JSON structure:
   "bottlenecks": ["string"],
   "manualTasks": ["string"],
   "primaryFinding": "string — one emotionally resonant finding headline, specific to this business",
+  "primaryImpact": "string — the single most impactful metric for this business, e.g. '9 hrs/mo Recovered' or '$360/yr Savings' or '3 Processes Automated'",
+  "secondaryImpact": "string — the secondary metric, e.g. '3 Processes Automated' or 'CRM Visibility Added'",
   "estimatedMonthlySoftwareSpend": number,
   "estimatedReplaceableMonthlySpend": number,
   "googleWorkspaceOpportunities": ["string"],
@@ -322,6 +326,8 @@ export async function POST(req: NextRequest) {
         bottlenecks:                     capturedAnalysis.bottlenecks ?? [],
         manualTasks:                     capturedAnalysis.manualTasks ?? [],
         primaryFinding:                  capturedAnalysis.primaryFinding ?? "",
+        primaryImpact:                   capturedAnalysis.primaryImpact ?? "",
+        secondaryImpact:                 capturedAnalysis.secondaryImpact ?? "",
         businessType:                    capturedAnalysis.businessType ?? "",
         currentGWUsage:                  capturedAnalysis.currentGWUsage ?? "",
       } : null;
