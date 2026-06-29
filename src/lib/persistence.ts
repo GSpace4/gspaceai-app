@@ -9,7 +9,20 @@ import type { AppState, DeliverablesState } from "./types";
 import { STORAGE_KEY } from "./constants";
 import { getInitialState } from "@/context/AppStateContext";
 
-// Strip report content (large) before saving — keep status flags only
+// Strip report content (large) before saving — keep status flags only.
+//
+// What IS persisted:
+//   - stage, sessionId, user profile, payments
+//   - audit: all fields including v2.0 questionnaire data:
+//       freeQuestions, paid29Questions       — needed to resume mid-questionnaire
+//       freeIntakeAnswers, paid29IntakeAnswers, paid79ChatAnswers — all answers
+//       freeReportSummary                   — needed for $29 intake context
+//       currentQuestionIndex                — resume at exact question after refresh
+//   - messages (capped at 50)
+//
+// What is NOT persisted:
+//   - deliverable content/PDFs — re-generated on demand (too large for localStorage)
+//
 function sanitizeForStorage(state: AppState): AppState {
   const deliverables: DeliverablesState = {
     platform_consolidation_snapshot: {
@@ -29,6 +42,7 @@ function sanitizeForStorage(state: AppState): AppState {
     deliverables,
     // Keep last 50 messages to prevent unbounded growth
     messages: state.messages.slice(-50),
+    // audit spread via ...state already includes all v2.0 questionnaire fields
   };
 }
 
