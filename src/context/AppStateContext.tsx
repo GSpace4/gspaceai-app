@@ -74,6 +74,14 @@ export function getInitialState(): AppState {
       estimatedReplaceableMonthlySpend: 0,
       estimatedAnnualSavings: 0,
       auditComplete: false,
+      // v2.0 questionnaire fields
+      freeQuestions: [],
+      paid29Questions: [],
+      freeIntakeAnswers: [],
+      paid29IntakeAnswers: [],
+      paid79ChatAnswers: [],
+      freeReportSummary: "",
+      currentQuestionIndex: 0,
     },
     messages: [],
     payments: {

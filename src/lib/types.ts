@@ -8,25 +8,38 @@
 // ------------------------------------------------------------
 
 export type WorkflowStage =
+  // --- Existing stages (preserved exactly) ---
   | "intro"
   | "collect_name"
   | "collect_business_basics"
   | "audit_in_progress"
   | "audit_wrap_up"
+  // --- Free tier questionnaire (supersedes audit_in_progress in v2 flow) ---
+  | "free_questionnaire_loading"
+  | "free_questionnaire_active"
+  | "free_questionnaire_complete"
   | "free_report_generating"
   | "free_report_ready"
+  // --- $29 tier ---
   | "recommendations_payment_pending"
   | "recommendations_email_requested"
   | "recommendations_verifying"
   | "recommendations_verified"
+  | "paid_29_questionnaire_loading"
+  | "paid_29_questionnaire_active"
+  | "paid_29_questionnaire_complete"
   | "recommendations_report_generating"
   | "recommendations_report_ready"
+  // --- $79 tier ---
   | "implementation_payment_pending"
   | "implementation_email_requested"
   | "implementation_verifying"
   | "implementation_verified"
+  | "paid_79_chat_active"
+  | "paid_79_chat_complete"
   | "implementation_report_generating"
   | "implementation_report_ready"
+  // --- $159 tier ---
   | "done_with_you_payment_pending"
   | "done_with_you_email_requested"
   | "done_with_you_verifying"
@@ -65,6 +78,33 @@ export type SoftwareInventoryItem = {
   recommendedAction?: RecommendedAction;
   googleWorkspaceAlternative?: string;
   notes?: string;
+};
+
+// ------------------------------------------------------------
+// v2.0 Questionnaire Types
+// ------------------------------------------------------------
+
+export type QuestionOption = {
+  id: string;
+  label: string;
+};
+
+export type GeneratedQuestion = {
+  id: string;
+  question: string;
+  type: "single_select" | "multi_select";
+  options: QuestionOption[];
+};
+
+export type QuestionnaireAnswer = {
+  questionId: string;
+  question: string;
+  selectedOptions: string[];
+};
+
+export type GeneratedQuestionSet = {
+  tier: "free" | "paid_29";
+  questions: GeneratedQuestion[];
 };
 
 // ------------------------------------------------------------
@@ -118,6 +158,14 @@ export type AuditState = {
   estimatedReplaceableMonthlySpend: number;
   estimatedAnnualSavings: number;
   auditComplete: boolean;
+  // v2.0 questionnaire fields
+  freeQuestions: GeneratedQuestion[];
+  paid29Questions: GeneratedQuestion[];
+  freeIntakeAnswers: QuestionnaireAnswer[];
+  paid29IntakeAnswers: QuestionnaireAnswer[];
+  paid79ChatAnswers: Array<{ question: string; answer: string }>;
+  freeReportSummary: string;
+  currentQuestionIndex: number;
 };
 
 export type ConsolidationScoreLabel =

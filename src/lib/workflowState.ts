@@ -14,32 +14,43 @@ import type { WorkflowStage, AppState } from "./types";
 // ------------------------------------------------------------
 
 export const VALID_TRANSITIONS: Record<WorkflowStage, WorkflowStage[]> = {
-  intro:                             ["collect_name"],
-  collect_name:                      ["collect_business_basics"],
-  // Allow jumps: conversation may outrun stage machine if profile fields aren't extracted
-  collect_business_basics:           ["audit_in_progress", "audit_wrap_up", "free_report_generating"],
-  audit_in_progress:                 ["audit_wrap_up", "free_report_generating"],
-  audit_wrap_up:                     ["free_report_generating"],
-  free_report_generating:            ["free_report_ready"],
-  // Allow jumping to verified directly (payment already confirmed by modal)
-  free_report_ready:                 ["recommendations_payment_pending", "recommendations_verified"],
-  recommendations_payment_pending:   ["recommendations_email_requested", "recommendations_verified"],
-  recommendations_email_requested:   ["recommendations_verifying", "recommendations_payment_pending"],
-  recommendations_verifying:         ["recommendations_verified", "recommendations_payment_pending"],
-  recommendations_verified:          ["recommendations_report_generating"],
-  recommendations_report_generating: ["recommendations_report_ready"],
-  recommendations_report_ready:      ["implementation_payment_pending"],
-  implementation_payment_pending:    ["implementation_email_requested", "implementation_verified"],
-  implementation_email_requested:    ["implementation_verifying", "implementation_payment_pending"],
-  implementation_verifying:          ["implementation_verified", "implementation_payment_pending"],
-  implementation_verified:           ["implementation_report_generating"],
-  implementation_report_generating:  ["implementation_report_ready"],
-  implementation_report_ready:       ["done_with_you_payment_pending"],
-  done_with_you_payment_pending:     ["done_with_you_email_requested", "done_with_you_verified"],
-  done_with_you_email_requested:     ["done_with_you_verifying", "done_with_you_payment_pending"],
-  done_with_you_verifying:           ["done_with_you_verified", "done_with_you_payment_pending"],
-  done_with_you_verified:            ["complete"],
-  complete:                          [],
+  // --- Existing intake stages (preserved) ---
+  intro:                               ["collect_name"],
+  collect_name:                        ["collect_business_basics"],
+  collect_business_basics:             ["audit_in_progress", "audit_wrap_up", "free_report_generating", "free_questionnaire_loading"],
+  audit_in_progress:                   ["audit_wrap_up", "free_report_generating"],
+  audit_wrap_up:                       ["free_report_generating"],
+  // --- Free tier questionnaire ---
+  free_questionnaire_loading:          ["free_questionnaire_active"],
+  free_questionnaire_active:           ["free_questionnaire_complete"],
+  free_questionnaire_complete:         ["free_report_generating"],
+  free_report_generating:              ["free_report_ready"],
+  free_report_ready:                   ["recommendations_payment_pending", "recommendations_verified"],
+  // --- $29 tier ---
+  recommendations_payment_pending:     ["recommendations_email_requested", "recommendations_verified"],
+  recommendations_email_requested:     ["recommendations_verifying", "recommendations_payment_pending"],
+  recommendations_verifying:           ["recommendations_verified", "recommendations_payment_pending"],
+  recommendations_verified:            ["paid_29_questionnaire_loading", "recommendations_report_generating"],
+  paid_29_questionnaire_loading:       ["paid_29_questionnaire_active"],
+  paid_29_questionnaire_active:        ["paid_29_questionnaire_complete"],
+  paid_29_questionnaire_complete:      ["recommendations_report_generating"],
+  recommendations_report_generating:   ["recommendations_report_ready"],
+  recommendations_report_ready:        ["implementation_payment_pending"],
+  // --- $79 tier ---
+  implementation_payment_pending:      ["implementation_email_requested", "implementation_verified"],
+  implementation_email_requested:      ["implementation_verifying", "implementation_payment_pending"],
+  implementation_verifying:            ["implementation_verified", "implementation_payment_pending"],
+  implementation_verified:             ["paid_79_chat_active", "implementation_report_generating"],
+  paid_79_chat_active:                 ["paid_79_chat_complete"],
+  paid_79_chat_complete:               ["implementation_report_generating"],
+  implementation_report_generating:    ["implementation_report_ready"],
+  implementation_report_ready:         ["done_with_you_payment_pending"],
+  // --- $159 tier ---
+  done_with_you_payment_pending:       ["done_with_you_email_requested", "done_with_you_verified"],
+  done_with_you_email_requested:       ["done_with_you_verifying", "done_with_you_payment_pending"],
+  done_with_you_verifying:             ["done_with_you_verified", "done_with_you_payment_pending"],
+  done_with_you_verified:              ["complete"],
+  complete:                            [],
 };
 
 // ------------------------------------------------------------
