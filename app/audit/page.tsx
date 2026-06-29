@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useAppState } from "@/src/context/AppStateContext";
 import GSpaceAiLogo from "@/src/components/GSpaceAiLogo";
 import ProgressIndicator from "@/src/components/ProgressIndicator";
@@ -8,9 +8,10 @@ import ChatInterface from "@/src/components/ChatInterface";
 import ReportViewer from "@/src/components/ReportViewer";
 import OfferCard from "@/src/components/OfferCard";
 import PaymentVerificationModal from "@/src/components/PaymentVerificationModal";
+import QuestionnaireStep from "@/src/components/QuestionnaireStep";
 import { isAuditStage } from "@/src/lib/workflowState";
 import type { FreeReportData } from "@/src/lib/reportGeneration";
-import type { PaymentsState, AuditState } from "@/src/lib/types";
+import type { PaymentsState, AuditState, QuestionnaireAnswer } from "@/src/lib/types";
 import { calculateImpact } from "@/src/lib/scoring";
 import { estimateSavings } from "@/src/lib/savingsEstimator";
 
@@ -217,6 +218,13 @@ export default function AuditPage() {
   // Payment verification modal state
   const [verifyModalProduct, setVerifyModalProduct] = useState<keyof PaymentsState | null>(null);
 
+  // v2.0 questionnaire state
+  const [freeQuestionsLoading, setFreeQuestionsLoading]     = useState(false);
+  const [paid29QuestionsLoading, setPaid29QuestionsLoading] = useState(false);
+  const [questionnaireError, setQuestionnaireError]         = useState<string | null>(null);
+  const freeQuestionsTriggered   = useRef(false);
+  const paid29QuestionsTriggered = useRef(false);
+
   // ------------------------------------------------------------------
   // Trigger report generation when stage reaches free_report_generating
   // ------------------------------------------------------------------
@@ -237,6 +245,7 @@ export default function AuditPage() {
             auditState: state.audit,
             user: state.user,
             sessionId: state.sessionId,
+            freeIntakeAnswers: state.audit.freeIntakeAnswers,
           }),
         });
 
@@ -254,6 +263,25 @@ export default function AuditPage() {
         setPdfBase64(data.pdfBase64);
         // data.reportData is the full FreeReportData object with correct property names
         setReportData(data.reportData as FreeReportData);
+
+        // Build and store free report summary for $29 questionnaire + report context
+        const rd = data.reportData as FreeReportData;
+        if (rd) {
+          const toolList    = rd.softwareInventory?.map((t: {name: string}) => t.name).join(", ") ?? "";
+          const topOpps     = rd.consolidationOpportunities?.slice(0, 3).map((o: {title: string}) => o.title).join("; ") ?? "";
+          const findings    = rd.keyFindings?.slice(0, 3).join(" ") ?? "";
+          const score       = rd.scoreBreakdown;
+          const savings     = rd.savings;
+          const summary     = [
+            `Business: ${state.user.businessName} (${state.user.businessType})`,
+            `GSpace Consolidation Score: ${score?.total ?? 0}/100 (${score?.label ?? ""})`,
+            `Tools Identified: ${toolList}`,
+            `Estimated Annual Savings: $${savings?.estimatedAnnualSavings?.toLocaleString() ?? 0}`,
+            `Top Opportunities: ${topOpps}`,
+            `Key Findings: ${findings}`,
+          ].join("\n");
+          dispatch({ type: "SET_FREE_REPORT_SUMMARY", summary });
+        }
 
         // Update deliverable status in app state
         dispatch({
@@ -309,6 +337,9 @@ export default function AuditPage() {
             auditState: state.audit,
             user: state.user,
             sessionId: state.sessionId,
+            freeIntakeAnswers:   state.audit.freeIntakeAnswers,
+            paid29IntakeAnswers: state.audit.paid29IntakeAnswers,
+            freeReportContent:   state.audit.freeReportSummary,
           }),
         });
         if (!res.ok) {
@@ -333,11 +364,12 @@ export default function AuditPage() {
     generateRec();
   }, [isHydrated, stage, state.audit, state.user, dispatch, transition, recRetryCount]);
 
-  // Auto-trigger generation when entering recommendations_verified
+  // v2.0: recommendations_verified → $29 questionnaire (not directly to report generation)
   useEffect(() => {
     if (stage === "recommendations_verified") {
-      recGenerationTriggered.current = false;
-      transition("recommendations_report_generating");
+      paid29QuestionsTriggered.current = false;
+      recGenerationTriggered.current   = false;
+      transition("paid_29_questionnaire_loading");
     }
   }, [stage, transition]);
 
@@ -361,6 +393,13 @@ export default function AuditPage() {
             auditState: state.audit,
             user: state.user,
             sessionId: state.sessionId,
+            freeIntakeAnswers:    state.audit.freeIntakeAnswers,
+            paid29IntakeAnswers:  state.audit.paid29IntakeAnswers,
+            paid79ChatAnswers:    state.audit.paid79ChatAnswers,
+            freeReportContent:    state.audit.freeReportSummary,
+            paid29ReportContent:  recReportData
+              ? String((recReportData as Record<string,unknown>).executiveSummary ?? "")
+              : undefined,
           }),
         });
 
@@ -394,11 +433,11 @@ export default function AuditPage() {
     generateImpl();
   }, [isHydrated, stage, state.audit, state.user, dispatch, transition, implRetryCount]);
 
-  // Auto-trigger implementation guide generation when entering implementation_verified
+  // v2.0: implementation_verified → $79 chat intake (not directly to report generation)
   useEffect(() => {
     if (stage === "implementation_verified") {
       implGenerationTriggered.current = false;
-      transition("implementation_report_generating");
+      transition("paid_79_chat_active");
     }
   }, [stage, transition]);
 
@@ -406,6 +445,101 @@ export default function AuditPage() {
   useEffect(() => {
     if (stage === "done_with_you_verified") {
       transition("complete");
+    }
+  }, [stage, transition]);
+
+  // ------------------------------------------------------------------
+  // v2.0: Fetch free-tier questions when entering free_questionnaire_loading
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (stage !== "free_questionnaire_loading") return;
+    if (freeQuestionsTriggered.current) return;
+    freeQuestionsTriggered.current = true;
+    setFreeQuestionsLoading(true);
+    setQuestionnaireError(null);
+
+    fetch("/api/generate-questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tier: "free" }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.questions?.length) throw new Error("No questions returned");
+        dispatch({ type: "SET_FREE_QUESTIONS", questions: data.questions });
+        dispatch({ type: "SET_CURRENT_QUESTION_INDEX", index: 0 });
+        transition("free_questionnaire_active");
+      })
+      .catch(err => {
+        setQuestionnaireError(err.message ?? "Failed to load questions");
+        freeQuestionsTriggered.current = false;
+      })
+      .finally(() => setFreeQuestionsLoading(false));
+  }, [isHydrated, stage, dispatch, transition]);
+
+  // Reset free questionnaire trigger when returning to audit start
+  useEffect(() => {
+    if (stage === "intro" || stage === "collect_name") {
+      freeQuestionsTriggered.current = false;
+    }
+  }, [stage]);
+
+  // Auto-advance from free_questionnaire_complete to report generation
+  useEffect(() => {
+    if (stage === "free_questionnaire_complete") {
+      transition("free_report_generating");
+    }
+  }, [stage, transition]);
+
+  // ------------------------------------------------------------------
+  // v2.0: Fetch $29-tier questions when entering paid_29_questionnaire_loading
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (stage !== "paid_29_questionnaire_loading") return;
+    if (paid29QuestionsTriggered.current) return;
+    paid29QuestionsTriggered.current = true;
+    setPaid29QuestionsLoading(true);
+    setQuestionnaireError(null);
+
+    fetch("/api/generate-questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tier: "paid_29",
+        priorContext: {
+          freeIntakeAnswers:   state.audit.freeIntakeAnswers,
+          freeReportSummary:   state.audit.freeReportSummary,
+        },
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.questions?.length) throw new Error("No questions returned");
+        dispatch({ type: "SET_PAID29_QUESTIONS", questions: data.questions });
+        dispatch({ type: "SET_CURRENT_QUESTION_INDEX", index: 0 });
+        transition("paid_29_questionnaire_active");
+      })
+      .catch(err => {
+        setQuestionnaireError(err.message ?? "Failed to load questions");
+        paid29QuestionsTriggered.current = false;
+      })
+      .finally(() => setPaid29QuestionsLoading(false));
+  }, [isHydrated, stage, state.audit.freeIntakeAnswers, state.audit.freeReportSummary, dispatch, transition]);
+
+  // Auto-advance from paid_29_questionnaire_complete to report generation
+  useEffect(() => {
+    if (stage === "paid_29_questionnaire_complete") {
+      transition("recommendations_report_generating");
+    }
+  }, [stage, transition]);
+
+  // Auto-advance from paid_79_chat_complete to implementation report generation
+  useEffect(() => {
+    if (stage === "paid_79_chat_complete") {
+      implGenerationTriggered.current = false;
+      transition("implementation_report_generating");
     }
   }, [stage, transition]);
 
@@ -431,7 +565,54 @@ export default function AuditPage() {
     }
   }
 
-  const showChat = isAuditStage(stage);
+  // v2.0: chat only for basic intake stages and $79 intake — NOT for questionnaire stages
+  const showChat = [
+    "intro", "collect_name", "collect_business_basics",
+    "audit_in_progress", "audit_wrap_up",
+    "paid_79_chat_active", "paid_79_chat_complete",
+  ].includes(stage);
+
+  // v2.0: questionnaire display flags
+  const showFreeQuestionnaire = [
+    "free_questionnaire_loading", "free_questionnaire_active", "free_questionnaire_complete",
+  ].includes(stage);
+
+  const showPaid29Questionnaire = [
+    "paid_29_questionnaire_loading", "paid_29_questionnaire_active", "paid_29_questionnaire_complete",
+  ].includes(stage);
+
+  // v2.0: system context for $79 chat intake — built from all prior context
+  const paid79SystemContext = useMemo(() => {
+    if (stage !== "paid_79_chat_active" && stage !== "paid_79_chat_complete") return undefined;
+
+    const formatAnswers = (answers: QuestionnaireAnswer[]) =>
+      answers.map((a, i) => `Q${i + 1}: ${a.question}\nA: ${a.selectedOptions.join(", ")}`).join("\n\n");
+
+    return [
+      "You are GSpaceAi conducting the final intake before generating the Implementation Guide + SOP Book.",
+      "The customer has completed two prior intake stages and you have full context on their business.",
+      "",
+      "Prior context from free audit:",
+      formatAnswers(state.audit.freeIntakeAnswers),
+      "",
+      "Prior context from recommendations intake:",
+      formatAnswers(state.audit.paid29IntakeAnswers),
+      "",
+      state.audit.freeReportSummary ? `Free audit findings:\n${state.audit.freeReportSummary}` : "",
+      recReportData?.executiveSummary ? `Recommendations report summary:\n${recReportData.executiveSummary}` : "",
+      "",
+      "Your job is to ask FEWER THAN 10 questions total. Focus only on what you still need to know",
+      "to generate a practical, business-specific implementation guide. Ask about:",
+      "- Which 1-2 systems they most want to build first",
+      "- Their comfort level with Google Workspace tools",
+      "- Any specific technical constraints or team limitations",
+      "- Timeline and priority preferences",
+      "",
+      "Do not re-ask anything already answered. Be direct and efficient.",
+      "When you have enough information, set confirmedReady: true in your extractedData.",
+    ].filter(Boolean).join("\n");
+  }, [stage, state.audit.freeIntakeAnswers, state.audit.paid29IntakeAnswers,
+      state.audit.freeReportSummary, recReportData]);
 
   // Free report display
   const showGenerating = stage === "free_report_generating";
@@ -492,10 +673,62 @@ export default function AuditPage() {
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto w-full h-full flex flex-col">
 
-          {/* Chat (audit stages) */}
+          {/* Chat — basic intake (intro/name/business) and $79 paid chat */}
           {showChat && (
             <div className="flex-1 flex flex-col min-h-0">
-              <ChatInterface />
+              <ChatInterface systemContextOverride={paid79SystemContext} />
+            </div>
+          )}
+
+          {/* Free tier questionnaire */}
+          {showFreeQuestionnaire && (
+            <QuestionnaireStep
+              questions={state.audit.freeQuestions}
+              isLoading={freeQuestionsLoading || stage === "free_questionnaire_loading"}
+              tierLabel="Free Audit"
+              initialIndex={stage === "free_questionnaire_active" ? state.audit.currentQuestionIndex : 0}
+              initialAnswers={state.audit.freeIntakeAnswers}
+              onComplete={(answers: QuestionnaireAnswer[]) => {
+                dispatch({ type: "SET_FREE_INTAKE_ANSWERS", answers });
+                dispatch({ type: "SET_CURRENT_QUESTION_INDEX", index: 0 });
+                transition("free_questionnaire_complete");
+              }}
+            />
+          )}
+
+          {/* $29 tier questionnaire */}
+          {showPaid29Questionnaire && (
+            <QuestionnaireStep
+              questions={state.audit.paid29Questions}
+              isLoading={paid29QuestionsLoading || stage === "paid_29_questionnaire_loading"}
+              tierLabel="Recommendations Report"
+              initialIndex={stage === "paid_29_questionnaire_active" ? state.audit.currentQuestionIndex : 0}
+              initialAnswers={state.audit.paid29IntakeAnswers}
+              onComplete={(answers: QuestionnaireAnswer[]) => {
+                dispatch({ type: "SET_PAID29_INTAKE_ANSWERS", answers });
+                dispatch({ type: "SET_CURRENT_QUESTION_INDEX", index: 0 });
+                transition("paid_29_questionnaire_complete");
+              }}
+            />
+          )}
+
+          {/* Questionnaire error */}
+          {questionnaireError && (
+            <div className="flex-1 flex items-center justify-center px-6 py-16">
+              <div className="text-center max-w-md">
+                <p className="text-brand-red font-semibold mb-2">Failed to load questions</p>
+                <p className="text-brand-dark/60 text-sm mb-4">{questionnaireError}</p>
+                <button
+                  onClick={() => {
+                    setQuestionnaireError(null);
+                    freeQuestionsTriggered.current   = false;
+                    paid29QuestionsTriggered.current = false;
+                    if (stage === "free_questionnaire_loading")   dispatch({ type: "TRANSITION_STAGE", to: "free_questionnaire_loading" });
+                    if (stage === "paid_29_questionnaire_loading") dispatch({ type: "TRANSITION_STAGE", to: "paid_29_questionnaire_loading" });
+                  }}
+                  className="text-brand-blue text-sm font-medium underline"
+                >Try again</button>
+              </div>
             </div>
           )}
 

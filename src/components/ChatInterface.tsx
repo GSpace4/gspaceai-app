@@ -17,7 +17,7 @@ function makeMessage(role: ChatMessage["role"], content: string): ChatMessage {
   return { id: makeId(), role, content, timestamp: new Date().toISOString() };
 }
 
-export default function ChatInterface() {
+export default function ChatInterface({ systemContextOverride }: { systemContextOverride?: string } = {}) {
   const { state, dispatch, transition, isHydrated } = useAppState();
   const { stage, messages, user, sessionId } = state;
 
@@ -91,28 +91,31 @@ export default function ChatInterface() {
       const bizName = up?.businessName || user.businessName;
 
       // ── Priority 1: confirmedReady — works from ANY audit stage.
-      // The conversation may have outrun the stage machine (e.g. stage stuck at
-      // collect_business_basics). Always move to report generation when confirmed.
       if (extracted.confirmedReady && isAuditStage(currentStage)) {
-        transition("free_report_generating");
+        // $79 chat: Gemini signals completion → move to chat_complete
+        if (currentStage === "paid_79_chat_active") {
+          transition("paid_79_chat_complete");
+        } else {
+          transition("free_report_generating");
+        }
         return;
       }
 
-      // ── Priority 2: auditComplete — move to wrap-up from any non-wrap-up audit stage.
-      if (extracted.auditComplete && isAuditStage(currentStage) && currentStage !== "audit_wrap_up") {
+      // ── Priority 2: auditComplete — move to wrap-up (not applicable in $79 chat)
+      if (extracted.auditComplete && isAuditStage(currentStage) &&
+          currentStage !== "audit_wrap_up" && currentStage !== "paid_79_chat_active") {
         transition("audit_wrap_up");
         return;
       }
 
-      // ── Profile-based transitions (lower priority, run when AI hasn't signalled completion)
+      // ── Profile-based transitions
       if ((currentStage === "collect_name" || currentStage === "intro") && name) {
         transition("collect_business_basics");
         return;
       }
-      // Transition to audit_in_progress once we have ANY business name.
-      // Removed businessType requirement — Gemini doesn't always extract it in the same exchange.
+      // v2.0: business basics complete → start free questionnaire (no more open-ended audit chat)
       if (currentStage === "collect_business_basics" && bizName) {
-        transition("audit_in_progress");
+        transition("free_questionnaire_loading");
         return;
       }
     },
@@ -139,6 +142,7 @@ export default function ChatInterface() {
             sessionId,
             isFirstMessage: userMessageCount === 1,
             hadBusinessName: !!user.businessName,
+            ...(systemContextOverride && { systemContextOverride }),
           }),
         });
 
