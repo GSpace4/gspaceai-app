@@ -96,10 +96,11 @@ export function canTransition(
 // ------------------------------------------------------------
 
 export function getProgressStep(stage: WorkflowStage): number {
-  if (["intro", "collect_name", "collect_business_basics", "audit_in_progress", "audit_wrap_up"].includes(stage)) return 1;
+  if (["intro", "collect_name", "collect_business_basics", "audit_in_progress", "audit_wrap_up",
+       "free_questionnaire_loading", "free_questionnaire_active", "free_questionnaire_complete"].includes(stage)) return 1;
   if (["free_report_generating", "free_report_ready"].includes(stage)) return 2;
-  if (stage.startsWith("recommendations_")) return 3;
-  if (stage.startsWith("implementation_")) return 4;
+  if (stage.startsWith("recommendations_") || stage.startsWith("paid_29_")) return 3;
+  if (stage.startsWith("implementation_") || stage.startsWith("paid_79_")) return 4;
   if (stage.startsWith("done_with_you_") || stage === "complete") return 5;
   return 1;
 }
@@ -117,7 +118,12 @@ export const PROGRESS_STEPS = [
 // ------------------------------------------------------------
 
 export function isAuditStage(stage: WorkflowStage): boolean {
-  return ["intro", "collect_name", "collect_business_basics", "audit_in_progress", "audit_wrap_up"].includes(stage);
+  return [
+    "intro", "collect_name", "collect_business_basics",
+    "audit_in_progress", "audit_wrap_up",
+    "free_questionnaire_loading", "free_questionnaire_active", "free_questionnaire_complete",
+    "paid_79_chat_active", "paid_79_chat_complete",
+  ].includes(stage);
 }
 
 export function isPaymentPendingStage(stage: WorkflowStage): boolean {

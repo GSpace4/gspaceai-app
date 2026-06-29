@@ -32,6 +32,8 @@ import type {
   ReportContent,
   GeminiExtractedData,
   ConsolidationScoreLabel,
+  GeneratedQuestion,
+  QuestionnaireAnswer,
 } from "@/lib/types";
 import { canTransition } from "@/lib/workflowState";
 import { saveState, loadState } from "@/lib/persistence";
@@ -113,7 +115,15 @@ export type AppAction =
   | { type: "SET_DELIVERABLE_STATUS"; key: keyof DeliverablesState; status: FreeDeliverableStatus | PaidDeliverableStatus }
   | { type: "SET_DELIVERABLE_CONTENT"; key: keyof DeliverablesState; content: ReportContent }
   | { type: "HYDRATE_FROM_STORAGE"; savedState: AppState }
-  | { type: "RESET_SESSION" };
+  | { type: "RESET_SESSION" }
+  // v2.0 questionnaire actions
+  | { type: "SET_FREE_QUESTIONS"; questions: GeneratedQuestion[] }
+  | { type: "SET_PAID29_QUESTIONS"; questions: GeneratedQuestion[] }
+  | { type: "SET_FREE_INTAKE_ANSWERS"; answers: QuestionnaireAnswer[] }
+  | { type: "SET_PAID29_INTAKE_ANSWERS"; answers: QuestionnaireAnswer[] }
+  | { type: "SET_PAID79_CHAT_ANSWERS"; answers: Array<{ question: string; answer: string }> }
+  | { type: "SET_FREE_REPORT_SUMMARY"; summary: string }
+  | { type: "SET_CURRENT_QUESTION_INDEX"; index: number };
 
 // ------------------------------------------------------------
 // Reducer
@@ -239,6 +249,35 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case "RESET_SESSION": {
       return getInitialState();
+    }
+
+    // v2.0 questionnaire reducer cases
+    case "SET_FREE_QUESTIONS": {
+      return { ...state, audit: { ...state.audit, freeQuestions: action.questions } };
+    }
+
+    case "SET_PAID29_QUESTIONS": {
+      return { ...state, audit: { ...state.audit, paid29Questions: action.questions } };
+    }
+
+    case "SET_FREE_INTAKE_ANSWERS": {
+      return { ...state, audit: { ...state.audit, freeIntakeAnswers: action.answers } };
+    }
+
+    case "SET_PAID29_INTAKE_ANSWERS": {
+      return { ...state, audit: { ...state.audit, paid29IntakeAnswers: action.answers } };
+    }
+
+    case "SET_PAID79_CHAT_ANSWERS": {
+      return { ...state, audit: { ...state.audit, paid79ChatAnswers: action.answers } };
+    }
+
+    case "SET_FREE_REPORT_SUMMARY": {
+      return { ...state, audit: { ...state.audit, freeReportSummary: action.summary } };
+    }
+
+    case "SET_CURRENT_QUESTION_INDEX": {
+      return { ...state, audit: { ...state.audit, currentQuestionIndex: action.index } };
     }
 
     default:
