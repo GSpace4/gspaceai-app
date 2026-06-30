@@ -271,6 +271,8 @@ export default function AuditPage() {
   const [reportData, setReportData] = useState<FreeReportData | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const generationTriggered = useRef(false);
+  const recSectionRef  = useRef<HTMLDivElement>(null);
+  const implSectionRef = useRef<HTMLDivElement>(null);
 
   // Recommendations report state
   const [recPdfBase64, setRecPdfBase64] = useState<string | null>(null);
@@ -644,6 +646,24 @@ export default function AuditPage() {
     }
   }, [stage, transition]);
 
+  // Scroll to Recommendations Report section when it starts generating
+  useEffect(() => {
+    if (stage !== "recommendations_report_generating") return;
+    const timer = setTimeout(() => {
+      recSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [stage]);
+
+  // Scroll to Implementation Guide section when it starts generating
+  useEffect(() => {
+    if (stage !== "implementation_report_generating") return;
+    const timer = setTimeout(() => {
+      implSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [stage]);
+
   // Mark free report as displayed
   function handleReportDisplayed() {
     if (state.deliverables.platform_consolidation_snapshot.status !== "displayed") {
@@ -959,6 +979,9 @@ export default function AuditPage() {
             />
           )}
 
+          {/* Scroll anchor — jumped to when recommendations_report_generating starts */}
+          <div ref={recSectionRef} />
+
           {/* ── Recommendations Report generating spinner ── */}
           {showRecGenerating && !recReportError && (
             <div className="flex-1 flex items-center justify-center px-6 py-16">
@@ -1008,6 +1031,9 @@ export default function AuditPage() {
               onVerifyPayment={() => setVerifyModalProduct("implementation_guide_sop")}
             />
           )}
+
+          {/* Scroll anchor — jumped to when implementation_report_generating starts */}
+          <div ref={implSectionRef} />
 
           {/* ── Implementation Guide generating spinner ── */}
           {showImplGenerating && !implReportError && (
