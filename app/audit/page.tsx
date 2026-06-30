@@ -734,15 +734,44 @@ export default function AuditPage() {
     stage === "recommendations_payment_pending" ||
     stage === "recommendations_verified" ||
     stage === "recommendations_report_generating" ||
-    stage === "recommendations_report_ready"
+    stage === "recommendations_report_ready" ||
+    stage === "implementation_payment_pending" ||
+    stage === "implementation_email_requested" ||
+    stage === "implementation_verifying" ||
+    // paid_79_chat_active / paid_79_chat_complete excluded — chat uses flex-1 h-full layout
+    stage === "implementation_report_generating" ||
+    stage === "implementation_report_ready" ||
+    stage === "done_with_you_payment_pending" ||
+    stage === "done_with_you_email_requested" ||
+    stage === "done_with_you_verifying" ||
+    stage === "done_with_you_verified" ||
+    stage === "complete"
   ) && !!(pdfBase64 || reportData);
   const showFreeOffer = stage === "free_report_ready" || stage === "recommendations_payment_pending";
 
   // Recommendations report display
   const showRecGenerating = stage === "recommendations_report_generating";
-  const showRecReport = stage === "recommendations_report_ready" && !!(recPdfBase64 || recReportData);
-  // Keep the Rec offer visible at implementation_payment_pending so Verify Payment button is always accessible
-  const showRecOffer = stage === "recommendations_report_ready" || stage === "implementation_payment_pending";
+  const showRecReport = (
+    stage === "recommendations_report_ready" ||
+    stage === "implementation_payment_pending" ||
+    stage === "implementation_email_requested" ||
+    stage === "implementation_verifying" ||
+    // paid_79_chat_active / paid_79_chat_complete excluded — chat uses flex-1 h-full layout
+    stage === "implementation_report_generating" ||
+    stage === "implementation_report_ready" ||
+    stage === "done_with_you_payment_pending" ||
+    stage === "done_with_you_email_requested" ||
+    stage === "done_with_you_verifying" ||
+    stage === "done_with_you_verified" ||
+    stage === "complete"
+  ) && !!(recPdfBase64 || recReportData);
+  // Keep the Rec offer visible through all implementation payment/verifying stages
+  const showRecOffer = (
+    stage === "recommendations_report_ready" ||
+    stage === "implementation_payment_pending" ||
+    stage === "implementation_email_requested" ||
+    stage === "implementation_verifying"
+  );
 
   // Implementation Guide display
   const showImplGenerating = stage === "implementation_report_generating";
