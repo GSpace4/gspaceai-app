@@ -537,6 +537,7 @@ export default function AuditPage() {
     })
       .then(r => r.json())
       .then(data => {
+        if (data.error) throw new Error(data.error);
         if (!data.questions?.length) throw new Error("No questions returned");
         dispatch({ type: "SET_FREE_QUESTIONS", questions: data.questions });
         dispatch({ type: "SET_CURRENT_QUESTION_INDEX", index: 0 });
@@ -587,6 +588,7 @@ export default function AuditPage() {
     })
       .then(r => r.json())
       .then(data => {
+        if (data.error) throw new Error(data.error);
         if (!data.questions?.length) throw new Error("No questions returned");
         dispatch({ type: "SET_PAID29_QUESTIONS", questions: data.questions });
         dispatch({ type: "SET_CURRENT_QUESTION_INDEX", index: 0 });
@@ -792,6 +794,7 @@ export default function AuditPage() {
                   }),
                 });
                 const data = await res.json();
+                if (data.error) throw new Error(data.error);
                 if (!data.questions?.length) throw new Error("No questions returned for Q6-10");
                 // Store all 10 answers (Q1-5 from hardcoded + Q6-10 from Gemini) for later report context
                 dispatch({ type: "SET_FREE_QUESTIONS", questions: [...state.audit.freeQuestions, ...data.questions] });

@@ -50,30 +50,124 @@ function formatAnswers(answers: QuestionnaireAnswer[]): string {
 }
 
 // ------------------------------------------------------------
-// Validation
+// Sanitize + validate — coerce minor violations rather than reject
 // ------------------------------------------------------------
-function validateQuestions(questions: unknown[], expectedCount: number): questions is GeneratedQuestion[] {
-  if (!Array.isArray(questions) || questions.length !== expectedCount) return false;
+function sanitizeAndValidate(questions: unknown[], expectedCount: number): GeneratedQuestion[] | null {
+  if (!Array.isArray(questions) || questions.length === 0) return null;
+
+  const result: GeneratedQuestion[] = [];
   for (const q of questions) {
-    if (typeof q !== "object" || q === null) return false;
-    const question = q as Record<string, unknown>;
-    if (typeof question.id !== "string") return false;
-    if (typeof question.question !== "string") return false;
-    if (question.question.length > 120) return false;
-    // Gemini only generates single_select or multi_select (text_input is hardcoded only)
-    if (question.type !== "single_select" && question.type !== "multi_select") return false;
-    if (!Array.isArray(question.options)) return false;
-    if (question.options.length < 3 || question.options.length > 5) return false;
-    for (const opt of question.options as unknown[]) {
-      if (typeof opt !== "object" || opt === null) return false;
-      const option = opt as Record<string, unknown>;
-      if (typeof option.id !== "string") return false;
-      if (typeof option.label !== "string") return false;
-      if (option.label.length > 60) return false;
+    if (typeof q !== "object" || q === null) continue;
+    const raw = q as Record<string, unknown>;
+    if (typeof raw.id !== "string" || typeof raw.question !== "string") continue;
+    if (raw.type !== "single_select" && raw.type !== "multi_select") continue;
+    if (!Array.isArray(raw.options) || raw.options.length < 2) continue;
+
+    // Coerce: truncate long question text and option labels instead of rejecting
+    const question = raw.question.length > 120 ? raw.question.slice(0, 117) + "…" : raw.question;
+
+    const options: GeneratedQuestion["options"] = [];
+    for (const opt of raw.options as unknown[]) {
+      if (typeof opt !== "object" || opt === null) continue;
+      const o = opt as Record<string, unknown>;
+      if (typeof o.id !== "string" || typeof o.label !== "string") continue;
+      const label = o.label.length > 60 ? o.label.slice(0, 57) + "…" : o.label;
+      options.push({ id: o.id, label });
+      if (options.length === 6) break; // cap at 6 options
     }
+
+    if (options.length < 2) continue;
+    result.push({ id: raw.id, question, type: raw.type, options });
+    if (result.length === expectedCount) break; // truncate to expected count
   }
-  return true;
+
+  return result.length >= expectedCount ? result.slice(0, expectedCount) : null;
 }
+
+// ------------------------------------------------------------
+// Hardcoded paid_29 fallback — used when both Gemini attempts fail
+// ------------------------------------------------------------
+const PAID_29_FALLBACK: GeneratedQuestion[] = [
+  {
+    id: "p29_f1",
+    question: "Which tools do you use every single day?",
+    type: "multi_select",
+    options: [
+      { id: "p29_f1_a", label: "Email (Gmail)" },
+      { id: "p29_f1_b", label: "Calendar / scheduling tool" },
+      { id: "p29_f1_c", label: "CRM or contact manager" },
+      { id: "p29_f1_d", label: "Project or task tracker" },
+      { id: "p29_f1_e", label: "Accounting or invoicing tool" },
+    ],
+  },
+  {
+    id: "p29_f2",
+    question: "Where does information most often get lost in your business?",
+    type: "single_select",
+    options: [
+      { id: "p29_f2_a", label: "Between email and other tools" },
+      { id: "p29_f2_b", label: "Between team members" },
+      { id: "p29_f2_c", label: "Between clients and our team" },
+      { id: "p29_f2_d", label: "Inside a single tool we underuse" },
+    ],
+  },
+  {
+    id: "p29_f3",
+    question: "How do new leads or customers typically first contact you?",
+    type: "single_select",
+    options: [
+      { id: "p29_f3_a", label: "Phone call or text" },
+      { id: "p29_f3_b", label: "Email inquiry" },
+      { id: "p29_f3_c", label: "Website form or booking link" },
+      { id: "p29_f3_d", label: "Social media or referral" },
+    ],
+  },
+  {
+    id: "p29_f4",
+    question: "How do you currently track your active clients or open jobs?",
+    type: "single_select",
+    options: [
+      { id: "p29_f4_a", label: "Spreadsheet or Google Sheets" },
+      { id: "p29_f4_b", label: "CRM or dedicated software" },
+      { id: "p29_f4_c", label: "Email threads or inbox labels" },
+      { id: "p29_f4_d", label: "Paper or whiteboard" },
+      { id: "p29_f4_e", label: "We don't have a consistent system" },
+    ],
+  },
+  {
+    id: "p29_f5",
+    question: "What's your biggest scheduling or appointment pain point?",
+    type: "single_select",
+    options: [
+      { id: "p29_f5_a", label: "Back-and-forth to find availability" },
+      { id: "p29_f5_b", label: "No-shows or last-minute cancellations" },
+      { id: "p29_f5_c", label: "Double-bookings or conflicts" },
+      { id: "p29_f5_d", label: "Scheduling isn't a problem for us" },
+    ],
+  },
+  {
+    id: "p29_f6",
+    question: "How do you currently generate reports or review business performance?",
+    type: "single_select",
+    options: [
+      { id: "p29_f6_a", label: "Manually pull numbers from multiple tools" },
+      { id: "p29_f6_b", label: "Built-in reports from our main software" },
+      { id: "p29_f6_c", label: "Spreadsheet we update ourselves" },
+      { id: "p29_f6_d", label: "We don't have a reporting process" },
+    ],
+  },
+  {
+    id: "p29_f7",
+    question: "What would make the biggest difference if Google Workspace solved it?",
+    type: "single_select",
+    options: [
+      { id: "p29_f7_a", label: "Fewer tools and less switching" },
+      { id: "p29_f7_b", label: "Less time on admin and manual tasks" },
+      { id: "p29_f7_c", label: "Better visibility into what's happening" },
+      { id: "p29_f7_d", label: "Reducing monthly software costs" },
+    ],
+  },
+];
 
 // ------------------------------------------------------------
 // Gemini call — retries once on validation failure
@@ -134,13 +228,18 @@ Return this exact JSON structure and nothing else:
     try {
       const jsonStr = extractJSON(raw);
       const parsed = JSON.parse(jsonStr) as GeminiQuestionSet;
-      if (validateQuestions(parsed.questions, questionCount)) {
-        return parsed.questions;
-      }
-      console.warn(`[generate-questions] Validation failed on attempt ${attempt + 1}:`, parsed);
+      const valid = sanitizeAndValidate(parsed.questions, questionCount);
+      if (valid) return valid;
+      console.warn(`[generate-questions] Sanitization failed on attempt ${attempt + 1}. Count: ${parsed.questions?.length ?? 0}`);
     } catch (err) {
       console.warn(`[generate-questions] JSON parse failed on attempt ${attempt + 1}:`, err);
     }
+  }
+
+  // Both attempts failed — use hardcoded fallback for paid_29 so the user isn't blocked
+  if (tier === "paid_29") {
+    console.warn("[generate-questions] Using hardcoded paid_29 fallback questions");
+    return PAID_29_FALLBACK;
   }
 
   throw new Error("Gemini returned invalid question structure after 2 attempts.");
