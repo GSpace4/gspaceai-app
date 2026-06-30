@@ -10,7 +10,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { AuditState, UserProfile, SoftwareInventoryItem } from "./types";
 import { logError } from "./db";
 import { calculateImpact, type ImpactDimension } from "./scoring";
-import { calculateConsolidationScore, type ScoreBreakdown } from "./scoring";
+import { calculateConsolidationScore, getScoreLabel, type ScoreBreakdown } from "./scoring";
 import { estimateSavings, type SavingsEstimate } from "./savingsEstimator";
 
 // ============================================================
@@ -355,7 +355,9 @@ async function generateRecommendationsContent(
     estimatedAnnualSavings: savings.estimatedAnnualSavings,
   };
 
-  const prompt = `You are a senior Google Workspace consolidation consultant for GSpace Solutions, generating a paid Recommendations Report for a small business owner.
+  const prompt = `CRITICAL: The GSpace Consolidation Score is ${score.total}/100. Use this exact number every single time the score is mentioned. Never calculate or substitute a different number. This is non-negotiable.
+
+You are a senior Google Workspace consolidation consultant for GSpace Solutions, generating a paid Recommendations Report for a small business owner.
 
 This report must feel like it was produced by a $5,000 business consultant. Every section must be specific, practical, and custom-built for this exact business. Never provide generic advice. Never repeat information across sections. Always explain the WHY behind every recommendation.
 
@@ -706,7 +708,15 @@ export async function buildRecommendationsReportData(
   audit: AuditState,
   user: UserProfile
 ): Promise<RecommendationsReportData> {
-  const scoreBreakdown = calculateConsolidationScore(audit);
+  const rawScoreBreakdown = calculateConsolidationScore(audit);
+  // Prefer the score already locked in audit state (set from freeAnalysisData upstream
+  // in the route handler) to avoid drift when fields like googleWorkspaceOpportunities
+  // are cleared for the rec-report context. Falls back to fresh calculation if not set.
+  const lockedTotal = audit.gspaceConsolidationScore > 0 ? audit.gspaceConsolidationScore : rawScoreBreakdown.total;
+  const scoreBreakdown: ScoreBreakdown = lockedTotal !== rawScoreBreakdown.total
+    ? { ...rawScoreBreakdown, total: lockedTotal, label: getScoreLabel(lockedTotal) }
+    : rawScoreBreakdown;
+
   const savings = estimateSavings(audit);
   const keyFindings = deriveKeyFindings(audit, scoreBreakdown, savings);
 

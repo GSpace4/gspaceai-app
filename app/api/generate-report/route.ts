@@ -411,6 +411,7 @@ export async function POST(req: NextRequest) {
         enriched = { ...enriched, answers: [contextEntry, scoreLockEntry, ...enriched.answers] };
       }
 
+      console.log(`[generate-report] rec-report score lock — freeAnalysisData.gspaceConsolidationScore: ${fad?.gspaceConsolidationScore ?? "N/A"}, enriched.gspaceConsolidationScore: ${enriched.gspaceConsolidationScore}`);
       const rawReportData = await buildRecommendationsReportData(enriched, user);
 
       // Fix 3: override Executive Snapshot metrics with freeAnalysisData values
