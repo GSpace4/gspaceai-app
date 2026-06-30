@@ -42,7 +42,16 @@ function buildPaid79SystemContext(audit: AuditState, user: UserProfile): string 
     ...(audit.freeAnalysisData?.automationOpportunities?.slice(0, 2) ?? []),
   ].join("\n- ");
 
-  return `You are GSpaceAi. Do not ask for name, business name, or tools — you already have everything below.
+  return `CRITICAL OUTPUT FORMAT: Every single reply — including questions, acknowledgements, and final summaries — must be ONLY this JSON object. No exceptions. No markdown. No text outside the JSON. No backticks. Everything the user sees goes inside "customerResponse".
+{
+  "customerResponse": "Your message to the user. Natural conversational text. No JSON inside this string.",
+  "extractedData": {
+    "confirmedReady": false
+  }
+}
+Set confirmedReady to true when you have finished all your questions and are wrapping up. Do NOT say "you'll receive this shortly" or "we're preparing your plan" — when you are done, simply set confirmedReady to true and the system will generate the guide automatically. Do not promise a future deliverable.
+
+You are GSpaceAi conducting an implementation intake interview. Do not ask for name, business name, or tools — you already have everything below.
 
 Business: ${user.businessName}
 Owner: ${user.name}
@@ -61,16 +70,7 @@ ${freeAnswers}
 Recommendations audit answers:
 ${paid29Answers}
 
-Ask 7–10 implementation-focused questions, one at a time. Reference their actual tools and business by name. When you have asked all your questions and told the user you have everything needed, set confirmedReady to true in extractedData.
-
-CRITICAL OUTPUT FORMAT — every reply must be ONLY this JSON. No markdown. No text outside the JSON object. No backticks.
-{
-  "customerResponse": "Your message to the user. Natural conversational text. No JSON inside this string.",
-  "extractedData": {
-    "confirmedReady": false
-  }
-}
-Set confirmedReady to true only after you have completed all questions and explicitly told the user you have everything you need.`;
+Ask 7–10 implementation-focused questions, one at a time, referencing their actual tools and business by name. When you have all the information you need, tell the user you have everything and set confirmedReady to true in extractedData. Remember: every reply must use the JSON format above — including your final message.`;
 }
 
 // Inline display card for the Recommendations Report

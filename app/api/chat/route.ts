@@ -68,8 +68,29 @@ async function callGeminiAuditWithContext(
     } catch { /* fall through to plain text */ }
   }
 
-  // Fallback: treat entire response as plain text reply
-  return { customerResponse: raw.trim(), extractedData: {} };
+  // Fallback: treat entire response as plain text reply.
+  // Secondary completion detection: if Gemini wrote a plain-text wrap-up
+  // instead of returning JSON, scan for phrases that signal it's done so
+  // the workflow can still advance to implementation_report_generating.
+  const lower = raw.toLowerCase();
+  const confirmedReady = [
+    "have everything i need",
+    "have everything needed",
+    "have all the information",
+    "have all i need",
+    "ready to generate",
+    "ready to create",
+    "ready to build",
+    "ready to craft",
+    "will receive this",
+    "you'll receive",
+    "you will receive",
+    "receive it shortly",
+    "receive this shortly",
+    "putting together your",
+  ].some(phrase => lower.includes(phrase));
+
+  return { customerResponse: raw.trim(), extractedData: { confirmedReady } };
 }
 
 type ChatRequestBody = {
