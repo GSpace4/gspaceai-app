@@ -215,7 +215,7 @@ export default function AdaptivePaid79Questionnaire({
 
       {/* Scrollable question + options */}
       <div
-        className="flex-1 overflow-y-auto px-6 pt-4 pb-6"
+        className="flex-1 min-h-0 overflow-y-auto px-6 pt-4 pb-6"
         style={{ opacity: visible ? 1 : 0, transition: "opacity 0.15s ease" }}
       >
         <h2 className="text-base font-bold text-brand-dark leading-tight mb-6">
