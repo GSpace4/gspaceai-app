@@ -481,7 +481,87 @@ export async function POST(req: NextRequest) {
 
     // ---- Implementation Guide + SOP Book ($79) ----
     if (reportType === "implementation_guide_sop") {
-      const enriched   = buildEnrichedAuditState(auditState, body);
+      console.log("[generate-report] implementation guide context check:", {
+        hasFreeAnalysisData:       !!body.freeAnalysisData,
+        softwareInventoryLength:   body.freeAnalysisData?.softwareInventory?.length ?? 0,
+        hasPaid29Answers:          !!body.paid29IntakeAnswers,
+        paid29AnswersLength:       body.paid29IntakeAnswers?.length ?? 0,
+        hasPaid79ChatAnswers:      !!body.paid79ChatAnswers,
+        paid79ChatAnswersLength:   body.paid79ChatAnswers?.length ?? 0,
+        hasFreeReportContent:      !!body.freeReportContent,
+        hasPaid29ReportContent:    !!body.paid29ReportContent,
+      });
+
+      const fad = body.freeAnalysisData;
+      let enriched = buildEnrichedAuditState(auditState, body);
+
+      if (fad) {
+        // Mirror the recommendations_report enrichment: lock inventory, score, and opps
+        // from freeAnalysisData so the Implementation Guide always matches the Snapshot.
+        const consolidationOpps: ConsolidationOpportunity[] = fad.softwareInventory
+          .filter(t => t.recommendedAction === "Replace" || t.recommendedAction === "Consolidate")
+          .map(t => ({
+            title:                      `${t.name} → ${t.googleWorkspaceAlternative || "Google Workspace"}`,
+            currentTool:                t.name,
+            googleWorkspaceReplacement: t.googleWorkspaceAlternative || "Google Workspace",
+            complexity:                 "Medium" as const,
+            priority: (t.replacementPotential === "High" ? "High"
+                     : t.replacementPotential === "Low"  ? "Low"
+                     : "Medium") as "High" | "Medium" | "Low",
+          }));
+        const automationOpps: AutomationOpportunity[] = fad.automationOpportunities.map(title => ({
+          title,
+          description:   title,
+          toolSuggested: "Google Apps Script",
+          complexity:    "Medium" as const,
+        }));
+        enriched = {
+          ...enriched,
+          softwareInventory:                fad.softwareInventory,
+          consolidationOpportunities:       consolidationOpps,
+          automationOpportunities:          automationOpps,
+          bottlenecks:                      fad.bottlenecks,
+          manualTasks:                      fad.manualTasks,
+          googleWorkspaceOpportunities:     [],
+          estimatedMonthlySoftwareSpend:    fad.estimatedMonthlySoftwareSpend,
+          estimatedReplaceableMonthlySpend: fad.estimatedReplaceableMonthlySpend,
+          estimatedAnnualSavings:           fad.estimatedAnnualSavings,
+          gspaceConsolidationScore:         fad.gspaceConsolidationScore,
+          scoreLabel:                       getScoreLabel(fad.gspaceConsolidationScore),
+        };
+
+        // Prepend structured context so Gemini uses real tool names and actual chat data
+        const toolLines = fad.softwareInventory
+          .map(t => `  - ${t.name} (${t.category}) $${t.estimatedMonthlyCost ?? 0}/mo — ${t.recommendedAction}${t.googleWorkspaceAlternative ? ` → ${t.googleWorkspaceAlternative}` : ""}`)
+          .join("\n");
+        const chatLines = (body.paid79ChatAnswers ?? [])
+          .map((qa, i) => `Q${i + 1}: ${qa.question}\nA: ${qa.answer}`)
+          .join("\n\n");
+        const contextEntry: AuditAnswer = {
+          question: "STRUCTURED CONTEXT FROM ALL THREE INTAKE STAGES",
+          answer: [
+            `Software inventory:\n${toolLines}`,
+            `GSpace Consolidation Score: ${fad.gspaceConsolidationScore}/100`,
+            `Primary finding: ${fad.primaryFinding}`,
+            `Consolidation opportunities: ${fad.consolidationOpportunities.join("; ")}`,
+            `Automation opportunities: ${fad.automationOpportunities.join("; ")}`,
+            `Monthly software spend: $${fad.estimatedMonthlySoftwareSpend}`,
+            `Replaceable spend: $${fad.estimatedReplaceableMonthlySpend}`,
+            ...(chatLines ? [`\nImplementation intake chat transcript:\n${chatLines}`] : []),
+            "",
+            "Generate the Implementation Guide based on the ACTUAL tools identified above.",
+            "Do not invent or hypothesize tools. Every system, SOP, and automation must reference actual tools from the inventory.",
+          ].join("\n"),
+          timestamp: new Date().toISOString(),
+        };
+        const scoreLockEntry: AuditAnswer = {
+          question: "SCORE LOCK INSTRUCTION",
+          answer:   `The GSpace Consolidation Score for this business is exactly ${fad.gspaceConsolidationScore}/100. Use this exact number whenever the score is referenced. Do not calculate or substitute a different number.`,
+          timestamp: new Date().toISOString(),
+        };
+        enriched = { ...enriched, answers: [contextEntry, scoreLockEntry, ...enriched.answers] };
+      }
+
       const reportData = await buildImplementationGuideData(enriched, user);
       const pdfBuffer = await generateImplementationGuidePDF(reportData);
 

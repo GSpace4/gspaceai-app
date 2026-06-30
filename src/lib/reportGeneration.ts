@@ -889,7 +889,9 @@ async function generateImplementationGuideContent(
     estimatedAnnualSavings: savings.estimatedAnnualSavings,
   };
 
-  const prompt = `You are a senior Google Workspace implementation consultant for GSpace Solutions, creating a paid Implementation Guide + SOP Book for a small business owner.
+  const prompt = `CRITICAL: The GSpace Consolidation Score is ${score.total}/100. The software inventory contains ${audit.softwareInventory.length} tools: ${audit.softwareInventory.map(t => t.name).join(", ")}. Use this exact data. Do not generate generic or placeholder content. Every system, SOP, and automation must reference actual tools from this inventory and specific details from the intake chat transcript in the audit context below.
+
+You are a senior Google Workspace implementation consultant for GSpace Solutions, creating a paid Implementation Guide + SOP Book for a small business owner.
 
 This guide must feel like it was produced by a $5,000 business consultant. It must be practical and implementation-oriented — the owner should be able to follow it without technical expertise. Every section must be specific to this exact business. No generic advice.
 

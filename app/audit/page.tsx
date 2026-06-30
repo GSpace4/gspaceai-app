@@ -470,6 +470,19 @@ export default function AuditPage() {
     async function generateImpl() {
       setImplReportError(null);
       try {
+        // Derive paid79ChatAnswers from messages state — SET_PAID79_CHAT_ANSWERS is
+        // never dispatched so state.audit.paid79ChatAnswers is always []. Pair each
+        // assistant message with the following user reply to capture the full transcript.
+        const paid79ChatAnswers = state.messages
+          .reduce<Array<{ question: string; answer: string }>>((acc, msg, idx, arr) => {
+            if (msg.role === "assistant" && arr[idx + 1]?.role === "user") {
+              acc.push({ question: msg.content, answer: arr[idx + 1].content });
+            }
+            return acc;
+          }, []);
+
+        console.log(`[AuditPage] impl guide call — freeAnalysisData: ${!!state.audit.freeAnalysisData}, paid79ChatAnswers: ${paid79ChatAnswers.length}`);
+
         const res = await fetch("/api/generate-report", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -480,7 +493,8 @@ export default function AuditPage() {
             sessionId: state.sessionId,
             freeIntakeAnswers:    state.audit.freeIntakeAnswers,
             paid29IntakeAnswers:  state.audit.paid29IntakeAnswers,
-            paid79ChatAnswers:    state.audit.paid79ChatAnswers,
+            paid79ChatAnswers,
+            freeAnalysisData:     state.audit.freeAnalysisData,
             freeReportContent:    state.audit.freeReportSummary,
             paid29ReportContent:  recReportData
               ? String((recReportData as Record<string,unknown>).executiveSummary ?? "")
@@ -516,7 +530,7 @@ export default function AuditPage() {
     }
 
     generateImpl();
-  }, [isHydrated, stage, state.audit, state.user, dispatch, transition, implRetryCount]);
+  }, [isHydrated, stage, state.audit, state.user, state.messages, dispatch, transition, implRetryCount]);
 
   // v2.0: implementation_verified → $79 chat intake (not directly to report generation)
   useEffect(() => {
