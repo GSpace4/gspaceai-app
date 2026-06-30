@@ -238,7 +238,7 @@ export default function QuestionnaireStep({
         className="flex-1 overflow-y-auto px-6 pt-4 pb-6"
         style={{ opacity: visible ? 1 : 0, transition: "opacity 0.15s ease" }}
       >
-        <h2 className="text-lg font-bold text-brand-dark leading-tight mb-6">
+        <h2 className="text-base font-bold text-brand-dark leading-tight mb-6">
           {question.question}
         </h2>
 

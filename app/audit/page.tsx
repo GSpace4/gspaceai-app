@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAppState } from "@/src/context/AppStateContext";
 import GSpaceAiLogo from "@/src/components/GSpaceAiLogo";
 import ProgressIndicator from "@/src/components/ProgressIndicator";
@@ -9,74 +9,12 @@ import ReportViewer from "@/src/components/ReportViewer";
 import OfferCard from "@/src/components/OfferCard";
 import PaymentVerificationModal from "@/src/components/PaymentVerificationModal";
 import QuestionnaireStep from "@/src/components/QuestionnaireStep";
+import AdaptivePaid79Questionnaire from "@/src/components/AdaptivePaid79Questionnaire";
 import { isAuditStage } from "@/src/lib/workflowState";
 import type { FreeReportData } from "@/src/lib/reportGeneration";
-import type { PaymentsState, AuditState, QuestionnaireAnswer, ChatMessage, UserProfile, FreeAnalysisData } from "@/src/lib/types";
+import type { PaymentsState, AuditState, QuestionnaireAnswer, FreeAnalysisData } from "@/src/lib/types";
 import { calculateImpact } from "@/src/lib/scoring";
 import { estimateSavings } from "@/src/lib/savingsEstimator";
-
-// ============================================================
-// Build $79 chat system context from all accumulated state.
-// Uses freeAnalysisData as the authoritative source for tools,
-// score, and primary finding. Instructs Gemini not to ask for
-// anything already known.
-// ============================================================
-function buildPaid79SystemContext(audit: AuditState, user: UserProfile, userMessageCount = 0): string {
-  // Compact format — keeps total prompt under 800 tokens
-  const freeAnswers = audit.freeIntakeAnswers
-    .map(a => `- ${a.question}: ${a.selectedOptions.join(", ")}`)
-    .join("\n");
-
-  const paid29Answers = audit.paid29IntakeAnswers
-    .map(a => `- ${a.question}: ${a.selectedOptions.join(", ")}`)
-    .join("\n");
-
-  // Name + action only — no costs or extra fields
-  const inventory = audit.freeAnalysisData?.softwareInventory
-    .map(t => `- ${t.name}: ${t.recommendedAction}`)
-    .join("\n") ?? "";
-
-  // Top 5 opportunities max
-  const topOpps = [
-    ...(audit.freeAnalysisData?.consolidationOpportunities?.slice(0, 3) ?? []),
-    ...(audit.freeAnalysisData?.automationOpportunities?.slice(0, 2) ?? []),
-  ].join("\n- ");
-
-  return `CRITICAL OUTPUT FORMAT: Every single reply — including questions, acknowledgements, and final summaries — must be ONLY this JSON object. No exceptions. No markdown. No text outside the JSON. No backticks. Everything the user sees goes inside "customerResponse".
-{
-  "customerResponse": "Your message to the user. Natural conversational text. No JSON inside this string.",
-  "extractedData": {
-    "confirmedReady": false
-  }
-}
-Set confirmedReady to true when you have finished all your questions and are wrapping up. Do NOT say "you'll receive this shortly" or "we're preparing your plan" — when you are done, simply set confirmedReady to true and the system will generate the guide automatically. Do not promise a future deliverable.
-
-You are GSpaceAi conducting an implementation intake interview. Do not ask for name, business name, or tools — you already have everything below.
-
-Business: ${user.businessName}
-Owner: ${user.name}
-Score: ${audit.freeAnalysisData?.gspaceConsolidationScore ?? 0}/100
-Primary finding: ${audit.freeAnalysisData?.primaryFinding ?? ""}
-
-Tools:
-${inventory}
-
-Top opportunities:
-- ${topOpps}
-
-Free audit answers:
-${freeAnswers}
-
-Recommendations audit answers:
-${paid29Answers}
-
-Question tracking: You have received ${userMessageCount} user ${userMessageCount === 1 ? "reply" : "replies"} so far. Ask one focused question per reply. Stop after 8 user replies total — do not ask a 9th question.
-${userMessageCount >= 8
-  ? "STOP NOW: You have all the information needed. Write a brief closing statement thanking the user and set confirmedReady to true. Do not ask any more questions under any circumstances."
-  : `You have ${8 - userMessageCount} ${8 - userMessageCount === 1 ? "question" : "questions"} remaining. Ask only what is most critical for the implementation guide.`}
-
-Remember: every reply must use the JSON format above — including your final message.`;
-}
 
 // Inline display card for the Recommendations Report
 function ImpactCardColor({ color }: { color: "green" | "blue" | "yellow" }) {
@@ -472,17 +410,7 @@ export default function AuditPage() {
     async function generateImpl() {
       setImplReportError(null);
       try {
-        // Derive paid79ChatAnswers from messages state — SET_PAID79_CHAT_ANSWERS is
-        // never dispatched so state.audit.paid79ChatAnswers is always []. Pair each
-        // assistant message with the following user reply to capture the full transcript.
-        const paid79ChatAnswers = state.messages
-          .reduce<Array<{ question: string; answer: string }>>((acc, msg, idx, arr) => {
-            if (msg.role === "assistant" && arr[idx + 1]?.role === "user") {
-              acc.push({ question: msg.content, answer: arr[idx + 1].content });
-            }
-            return acc;
-          }, []);
-
+        const paid79ChatAnswers = state.audit.paid79ChatAnswers;
         console.log(`[AuditPage] impl guide call — freeAnalysisData: ${!!state.audit.freeAnalysisData}, paid79ChatAnswers: ${paid79ChatAnswers.length}`);
 
         const res = await fetch("/api/generate-report", {
@@ -532,7 +460,7 @@ export default function AuditPage() {
     }
 
     generateImpl();
-  }, [isHydrated, stage, state.audit, state.user, state.messages, dispatch, transition, implRetryCount]);
+  }, [isHydrated, stage, state.audit, state.user, dispatch, transition, implRetryCount]);
 
   // v2.0: implementation_verified → $79 chat intake (not directly to report generation)
   useEffect(() => {
@@ -686,11 +614,10 @@ export default function AuditPage() {
     }
   }
 
-  // v2.0: chat only for basic intake stages and $79 intake — NOT for questionnaire stages
+  // Chat only for basic intake stages — questionnaire stages each have their own component
   const showChat = [
     "intro", "collect_name", "collect_business_basics",
     "audit_in_progress", "audit_wrap_up",
-    "paid_79_chat_active", "paid_79_chat_complete",
   ].includes(stage);
 
   // v2.0: questionnaire display flags
@@ -702,50 +629,8 @@ export default function AuditPage() {
     "paid_29_questionnaire_loading", "paid_29_questionnaire_active", "paid_29_questionnaire_complete",
   ].includes(stage);
 
-  // v2.0: system context for $79 chat intake — full structured context using freeAnalysisData
-  // userMessageCount is passed so the context can enforce a hard 8-question limit and
-  // tell Gemini exactly how many questions remain, preventing infinite clarification loops.
-  const paid79SystemContext = useMemo(() => {
-    if (stage !== "paid_79_chat_active" && stage !== "paid_79_chat_complete") return undefined;
-    const userMessageCount = state.messages.filter(m => m.role === "user").length;
-    return buildPaid79SystemContext(state.audit, state.user, userMessageCount);
-  }, [stage, state.audit, state.user, state.messages]);
-
-  // v2.0: generate opening message when $79 chat first mounts (messages empty)
-  const paid79OpeningTriggered = useRef(false);
-  useEffect(() => {
-    if (!isHydrated) return;
-    if (stage !== "paid_79_chat_active") return;
-    if (state.messages.length > 0) return;
-    if (paid79OpeningTriggered.current) return;
-    if (!paid79SystemContext) return;
-    paid79OpeningTriggered.current = true;
-
-    fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages:              [],
-        userMessage:           "Please begin the implementation intake interview.",
-        stage:                 "paid_79_chat_active",
-        sessionId:             state.sessionId,
-        systemContextOverride: paid79SystemContext,
-      }),
-    })
-      .then(r => r.json())
-      .then((data: { customerResponse?: string }) => {
-        if (data.customerResponse) {
-          const msg: ChatMessage = {
-            id:        Math.random().toString(36).slice(2),
-            role:      "assistant",
-            content:   data.customerResponse,
-            timestamp: new Date().toISOString(),
-          };
-          dispatch({ type: "ADD_MESSAGE", message: msg });
-        }
-      })
-      .catch(err => console.error("[AuditPage] $79 opening message error:", err));
-  }, [isHydrated, stage, state.messages.length, state.sessionId, paid79SystemContext, dispatch]);
+  // Adaptive tap-based intake for the $79 Implementation Guide
+  const showPaid79Questionnaire = stage === "paid_79_chat_active";
 
   // Free report display
   const showGenerating = stage === "free_report_generating";
@@ -835,11 +720,45 @@ export default function AuditPage() {
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto w-full h-full flex flex-col">
 
-          {/* Chat — basic intake (intro/name/business) and $79 paid chat */}
+          {/* Chat — basic intake only (intro → audit_wrap_up) */}
           {showChat && (
             <div className="flex-1 flex flex-col min-h-0">
-              <ChatInterface systemContextOverride={paid79SystemContext} />
+              <ChatInterface />
             </div>
+          )}
+
+          {/* Adaptive tap-based $79 intake — replaces the open chat */}
+          {showPaid79Questionnaire && (
+            <AdaptivePaid79Questionnaire
+              freeIntakeAnswers={state.audit.freeIntakeAnswers}
+              paid29IntakeAnswers={state.audit.paid29IntakeAnswers}
+              freeAnalysisData={state.audit.freeAnalysisData}
+              freeReportSummary={state.audit.freeReportSummary}
+              paid29ReportContent={
+                recReportData
+                  ? String((recReportData as Record<string, unknown>).executiveSummary ?? "")
+                  : undefined
+              }
+              onAnswered={(answers) => {
+                dispatch({
+                  type: "SET_PAID79_CHAT_ANSWERS",
+                  answers: answers.map(a => ({
+                    question: a.question,
+                    answer:   a.selectedOptions.join(", "),
+                  })),
+                });
+              }}
+              onComplete={(answers) => {
+                dispatch({
+                  type: "SET_PAID79_CHAT_ANSWERS",
+                  answers: answers.map(a => ({
+                    question: a.question,
+                    answer:   a.selectedOptions.join(", "),
+                  })),
+                });
+                transition("paid_79_chat_complete");
+              }}
+            />
           )}
 
           {/* Free tier questionnaire — Q1-Q5 hardcoded, Q6-Q10 fetched after Q5 */}
