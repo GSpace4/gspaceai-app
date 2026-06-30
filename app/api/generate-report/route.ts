@@ -160,7 +160,7 @@ Return this exact JSON structure:
 {
   "businessType": "string — the type of business based on Q1 and Q2 answers",
   "businessCategory": "string — specific category",
-  "currentGWUsage": "string — inferred from tool stack and context",
+  "currentGWUsage": "string — estimate as 'Not using', 'Basic', 'Moderate', or 'Advanced' based on which tools they selected and how much of their workflow Google Workspace already covers",
   "softwareInventory": [
     {
       "name": "string",
@@ -277,13 +277,21 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Step 2: extract name/businessName from Q4/Q5 if client didn't already send them
+      // Step 2: derive user profile fields directly from questionnaire answers.
+      // Q1/Q2 answer the business type with certainty — don't rely on Gemini to infer it.
+      // Q4/Q5 give name and business name. currentGWUsage comes from the analysis result.
+      const q1 = body.freeIntakeAnswers?.find(a => a.questionId === "hq1");
+      const q2 = body.freeIntakeAnswers?.find(a => a.questionId === "hq2");
       const q4 = body.freeIntakeAnswers?.find(a => a.questionId === "hq4");
       const q5 = body.freeIntakeAnswers?.find(a => a.questionId === "hq5");
+      const derivedBusinessType =
+        q2?.selectedOptions[0] || q1?.selectedOptions[0] || user.businessType || "";
       const enrichedUser: UserProfile = {
         ...user,
-        name:         q4?.selectedOptions[0] || user.name         || "",
-        businessName: q5?.selectedOptions[0] || user.businessName || "",
+        name:                        q4?.selectedOptions[0] || user.name         || "",
+        businessName:                q5?.selectedOptions[0] || user.businessName || "",
+        businessType:                derivedBusinessType,
+        currentGoogleWorkspaceUsage: capturedAnalysis?.currentGWUsage || user.currentGoogleWorkspaceUsage || "",
       };
 
       // Step 3: generate report content and PDF
