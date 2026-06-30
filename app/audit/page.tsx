@@ -790,6 +790,24 @@ export default function AuditPage() {
                 if (questionId === "hq5" && answer.selectedOptions[0]) {
                   dispatch({ type: "SET_USER", user: { businessName: answer.selectedOptions[0] } });
                 }
+                // Early-funnel session capture — fire and forget so it never blocks the UI
+                {
+                  let sessionUpdate: { stage?: string; name?: string; businessName?: string } | null = null;
+                  if (questionId === "hq1") {
+                    sessionUpdate = { stage: "intake_started" };
+                  } else if (questionId === "hq4" && answer.selectedOptions[0]) {
+                    sessionUpdate = { stage: "name_captured", name: answer.selectedOptions[0] };
+                  } else if (questionId === "hq5" && answer.selectedOptions[0]) {
+                    sessionUpdate = { stage: "business_name_captured", businessName: answer.selectedOptions[0] };
+                  }
+                  if (sessionUpdate) {
+                    fetch("/api/update-session", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ sessionId: state.sessionId, data: sessionUpdate }),
+                    }).catch((err) => console.warn("[session-capture]", err));
+                  }
+                }
               }}
               onFetchMore={async (answeredSoFar: QuestionnaireAnswer[]) => {
                 const res = await fetch("/api/generate-questions", {
