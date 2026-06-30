@@ -40,10 +40,17 @@ async function callGeminiAuditWithContext(
   // Cap history to last 6 messages (3 exchanges) to prevent token overflow.
   // The system context already contains all prior knowledge — sending full
   // history compounds tokens with each exchange.
-  const history = messages.slice(0, -1).slice(-6).map(m => ({
+  //
+  // Gemini requires chat history to start with a "user" role. The $79 opening
+  // message is a model-only turn (no prior user message in the client state),
+  // so when the user sends their first reply the raw history would be
+  // [{ role: "model" }], which Gemini rejects. Strip leading model entries.
+  const rawHistory = messages.slice(0, -1).slice(-6).map(m => ({
     role:  m.role === "user" ? "user" : "model",
     parts: [{ text: m.content }],
   }));
+  const firstUserIdx = rawHistory.findIndex(m => m.role === "user");
+  const history = firstUserIdx >= 0 ? rawHistory.slice(firstUserIdx) : [];
 
   const chat   = model.startChat({ history });
   const result = await chat.sendMessage(userMessage);
