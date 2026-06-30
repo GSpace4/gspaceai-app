@@ -925,10 +925,7 @@ export default function AuditPage() {
           {showFreeOffer && (
             <OfferCard
               productKey="recommendations_report"
-              onPayNow={(link) => {
-                if (link) window.open(link, "_blank");
-                transition("recommendations_payment_pending");
-              }}
+              onPayNow={() => transition("recommendations_payment_pending")}
               onVerifyPayment={() => setVerifyModalProduct("recommendations_report")}
             />
           )}
@@ -978,7 +975,7 @@ export default function AuditPage() {
           {showRecOffer && (
             <OfferCard
               productKey="implementation_guide_sop"
-              onPayNow={(link) => { if (link) window.open(link, "_blank"); transition("implementation_payment_pending"); }}
+              onPayNow={() => transition("implementation_payment_pending")}
               onVerifyPayment={() => setVerifyModalProduct("implementation_guide_sop")}
             />
           )}
@@ -1043,7 +1040,7 @@ export default function AuditPage() {
           {showImplOffer && (
             <OfferCard
               productKey="done_with_you"
-              onPayNow={(link) => { if (link) window.open(link, "_blank"); transition("done_with_you_payment_pending"); }}
+              onPayNow={() => transition("done_with_you_payment_pending")}
               onVerifyPayment={() => setVerifyModalProduct("done_with_you")}
             />
           )}
