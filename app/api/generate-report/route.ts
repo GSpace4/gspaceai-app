@@ -104,6 +104,7 @@ type AnalysisSoftwareItem = {
   estimatedMonthlyCost: number;
   replacementPotential: "Low" | "Medium" | "High";
   recommendedAction: "Keep" | "Replace" | "Consolidate" | "Automate" | "Enhance" | "Investigate";
+  googleWorkspaceAlternative?: string;
 };
 
 type IntakeAnalysis = {
@@ -167,7 +168,8 @@ Return this exact JSON structure:
       "category": "string",
       "estimatedMonthlyCost": number,
       "replacementPotential": "Low" | "Medium" | "High",
-      "recommendedAction": "Keep" | "Replace" | "Consolidate" | "Automate" | "Enhance" | "Investigate"
+      "recommendedAction": "Keep" | "Replace" | "Consolidate" | "Automate" | "Enhance" | "Investigate",
+      "googleWorkspaceAlternative": "string — the specific Google Workspace tools that replace or cover this platform (e.g. 'Google Calendar Appointment Schedules', 'Google Drive', 'Google Chat'). Use empty string if no direct replacement exists."
     }
   ],
   "consolidationOpportunities": ["string"],
@@ -210,20 +212,27 @@ function buildAuditStateFromAnalysis(
   analysis: IntakeAnalysis,
 ): AuditState {
   const softwareInventory: SoftwareInventoryItem[] = (analysis.softwareInventory ?? []).map(item => ({
-    name:                   item.name,
-    category:               item.category,
-    estimatedMonthlyCost:   item.estimatedMonthlyCost ?? 0,
-    replacementPotential:   item.replacementPotential ?? "Medium",
-    recommendedAction:      item.recommendedAction ?? "Investigate",
+    name:                       item.name,
+    category:                   item.category,
+    estimatedMonthlyCost:       item.estimatedMonthlyCost ?? 0,
+    replacementPotential:       item.replacementPotential ?? "Medium",
+    recommendedAction:          item.recommendedAction ?? "Investigate",
+    googleWorkspaceAlternative: item.googleWorkspaceAlternative ?? "",
   }));
 
-  const consolidationOpportunities: ConsolidationOpportunity[] = (analysis.consolidationOpportunities ?? []).map(title => ({
-    title,
-    currentTool:                "External tool",
-    googleWorkspaceReplacement: "Google Workspace",
-    complexity:                 "Medium" as const,
-    priority:                   "Medium" as const,
-  }));
+  // Build consolidation opportunities from the actual inventory rather than the string
+  // array so currentTool and googleWorkspaceReplacement contain real names, not placeholders.
+  const consolidationOpportunities: ConsolidationOpportunity[] = softwareInventory
+    .filter(t => t.recommendedAction === "Replace" || t.recommendedAction === "Consolidate")
+    .map(t => ({
+      title:                      `${t.name} → ${t.googleWorkspaceAlternative || "Google Workspace"}`,
+      currentTool:                t.name,
+      googleWorkspaceReplacement: t.googleWorkspaceAlternative || "Google Workspace",
+      complexity:                 "Medium" as const,
+      priority: (t.replacementPotential === "High" ? "High"
+               : t.replacementPotential === "Low"  ? "Low"
+               : "Medium") as "High" | "Medium" | "Low",
+    }));
 
   const automationOpportunities: AutomationOpportunity[] = (analysis.automationOpportunities ?? []).map(title => ({
     title,
