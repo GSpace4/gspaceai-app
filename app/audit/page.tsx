@@ -12,9 +12,7 @@ import QuestionnaireStep from "@/src/components/QuestionnaireStep";
 import AdaptivePaid79Questionnaire from "@/src/components/AdaptivePaid79Questionnaire";
 import { isAuditStage } from "@/src/lib/workflowState";
 import type { FreeReportData } from "@/src/lib/reportGeneration";
-import type { PaymentsState, AuditState, QuestionnaireAnswer, FreeAnalysisData } from "@/src/lib/types";
-import { calculateImpact } from "@/src/lib/scoring";
-import { estimateSavings } from "@/src/lib/savingsEstimator";
+import type { PaymentsState, QuestionnaireAnswer, FreeAnalysisData } from "@/src/lib/types";
 
 // Inline display card for the Recommendations Report
 function ImpactCardColor({ color }: { color: "green" | "blue" | "yellow" }) {
@@ -107,12 +105,12 @@ function RecommendationsReportCard({ data, pdfBase64, businessName, generatedAt,
 }
 
 // Inline display card for the Implementation Guide + SOP Book
-function ImplDeliveryCard({ data, pdfBase64, businessName, generatedAt, audit, onMarkDisplayed }: {
+function ImplDeliveryCard({ data, pdfBase64, businessName, generatedAt, freeAnalysisData, onMarkDisplayed }: {
   data?: Record<string, unknown> | null;
   pdfBase64: string | null;
   businessName: string;
   generatedAt?: string;
-  audit: AuditState;
+  freeAnalysisData: FreeAnalysisData | null;
   onMarkDisplayed: () => void;
 }) {
   const marked = useRef(false);
@@ -129,8 +127,17 @@ function ImplDeliveryCard({ data, pdfBase64, businessName, generatedAt, audit, o
     URL.revokeObjectURL(url);
   }
 
-  const executiveSummary = data?.executiveSummary as string | undefined;
-  const { primary, secondary } = calculateImpact(audit, estimateSavings(audit));
+  const executiveSummary  = data?.executiveSummary as string | undefined;
+  const toolCount         = freeAnalysisData?.softwareInventory?.length ?? 0;
+  const score             = freeAnalysisData?.gspaceConsolidationScore ?? 0;
+  const oppsCount         = (freeAnalysisData?.consolidationOpportunities?.length ?? 0) +
+                            (freeAnalysisData?.automationOpportunities?.length ?? 0);
+  const primaryLabel      = freeAnalysisData?.primaryImpact
+    || freeAnalysisData?.consolidationOpportunities?.[0]
+    || "Google Workspace Optimized";
+  const secondaryLabel    = freeAnalysisData?.secondaryImpact
+    || freeAnalysisData?.automationOpportunities?.[0]
+    || "";
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-6 space-y-4">
@@ -158,24 +165,26 @@ function ImplDeliveryCard({ data, pdfBase64, businessName, generatedAt, audit, o
           )}
         </div>
 
-        {/* Metrics row */}
+        {/* Metrics row — sourced from freeAnalysisData, same as Recommendations card */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="bg-brand-light rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-brand-dark">{audit.softwareInventory.length}</p>
+            <p className="text-2xl font-bold text-brand-blue">{score}</p>
+            <p className="text-xs text-brand-dark/50 mt-0.5">Consolidation Score</p>
+          </div>
+          <div className="bg-brand-light rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-brand-dark">{toolCount}</p>
             <p className="text-xs text-brand-dark/50 mt-0.5">Tools Analyzed</p>
           </div>
           <div className="bg-brand-light rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-brand-blue">{audit.automationOpportunities.length + audit.consolidationOpportunities.length}</p>
-            <p className="text-xs text-brand-dark/50 mt-0.5">Opportunities</p>
-          </div>
-          <div className="bg-brand-light rounded-xl p-3 text-center">
-            <p className={`text-base font-bold leading-tight ${ImpactCardColor({ color: primary.color })}`}>{primary.label}</p>
+            <p className="text-base font-bold leading-tight text-brand-blue">{primaryLabel}</p>
             <p className="text-xs text-brand-dark/50 mt-0.5">Primary Impact</p>
           </div>
-          <div className="bg-brand-light rounded-xl p-3 text-center">
-            <p className={`text-base font-bold leading-tight ${ImpactCardColor({ color: secondary.color })}`}>{secondary.label}</p>
-            <p className="text-xs text-brand-dark/50 mt-0.5">Secondary Impact</p>
-          </div>
+          {secondaryLabel && (
+            <div className="bg-brand-light rounded-xl p-3 text-center">
+              <p className="text-base font-bold leading-tight text-brand-green">{secondaryLabel}</p>
+              <p className="text-xs text-brand-dark/50 mt-0.5">Secondary Impact</p>
+            </div>
+          )}
         </div>
 
         {/* Executive summary */}
@@ -990,7 +999,7 @@ export default function AuditPage() {
                 pdfBase64={implPdfBase64}
                 businessName={state.user.businessName}
                 generatedAt={(implReportData?.generatedAt as string) ?? new Date().toISOString()}
-                audit={state.audit}
+                freeAnalysisData={state.audit.freeAnalysisData}
                 onMarkDisplayed={handleImplReportDisplayed}
               />
             </div>
@@ -1004,7 +1013,7 @@ export default function AuditPage() {
                 pdfBase64={null}
                 businessName={state.user.businessName}
                 generatedAt={new Date().toISOString()}
-                audit={state.audit}
+                freeAnalysisData={state.audit.freeAnalysisData}
                 onMarkDisplayed={handleImplReportDisplayed}
               />
             </div>

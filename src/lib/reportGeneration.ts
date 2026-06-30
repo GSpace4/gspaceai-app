@@ -1304,8 +1304,15 @@ export async function buildImplementationGuideData(
   audit: AuditState,
   user: UserProfile
 ): Promise<ImplementationGuideData> {
-  const scoreBreakdown = calculateConsolidationScore(audit);
+  const rawScoreBreakdown = calculateConsolidationScore(audit);
   const savings = estimateSavings(audit);
+
+  // Prefer the score already locked in audit state (set from freeAnalysisData upstream)
+  // to avoid a recalculated value diverging from the Snapshot and Recommendations score.
+  const lockedTotal = audit.gspaceConsolidationScore > 0 ? audit.gspaceConsolidationScore : rawScoreBreakdown.total;
+  const scoreBreakdown: ScoreBreakdown = lockedTotal !== rawScoreBreakdown.total
+    ? { ...rawScoreBreakdown, total: lockedTotal, label: getScoreLabel(lockedTotal) }
+    : rawScoreBreakdown;
 
   const ai = await generateImplementationGuideContent(audit, user, scoreBreakdown, savings);
 
