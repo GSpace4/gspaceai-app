@@ -61,7 +61,16 @@ ${freeAnswers}
 Recommendations audit answers:
 ${paid29Answers}
 
-Ask 7–10 implementation-focused questions, one at a time. Reference their actual tools and business by name. When done, say you have everything needed, then set confirmedReady: true in extractedData.`;
+Ask 7–10 implementation-focused questions, one at a time. Reference their actual tools and business by name. When you have asked all your questions and told the user you have everything needed, set confirmedReady to true in extractedData.
+
+CRITICAL OUTPUT FORMAT — every reply must be ONLY this JSON. No markdown. No text outside the JSON object. No backticks.
+{
+  "customerResponse": "Your message to the user. Natural conversational text. No JSON inside this string.",
+  "extractedData": {
+    "confirmedReady": false
+  }
+}
+Set confirmedReady to true only after you have completed all questions and explicitly told the user you have everything you need.`;
 }
 
 // Inline display card for the Recommendations Report
