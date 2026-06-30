@@ -21,7 +21,7 @@ import { estimateSavings } from "@/src/lib/savingsEstimator";
 // score, and primary finding. Instructs Gemini not to ask for
 // anything already known.
 // ============================================================
-function buildPaid79SystemContext(audit: AuditState, user: UserProfile): string {
+function buildPaid79SystemContext(audit: AuditState, user: UserProfile, userMessageCount = 0): string {
   // Compact format — keeps total prompt under 800 tokens
   const freeAnswers = audit.freeIntakeAnswers
     .map(a => `- ${a.question}: ${a.selectedOptions.join(", ")}`)
@@ -70,7 +70,12 @@ ${freeAnswers}
 Recommendations audit answers:
 ${paid29Answers}
 
-Ask 7–10 implementation-focused questions, one at a time, referencing their actual tools and business by name. When you have all the information you need, tell the user you have everything and set confirmedReady to true in extractedData. Remember: every reply must use the JSON format above — including your final message.`;
+Question tracking: You have received ${userMessageCount} user ${userMessageCount === 1 ? "reply" : "replies"} so far. Ask one focused question per reply. Stop after 8 user replies total — do not ask a 9th question.
+${userMessageCount >= 8
+  ? "STOP NOW: You have all the information needed. Write a brief closing statement thanking the user and set confirmedReady to true. Do not ask any more questions under any circumstances."
+  : `You have ${8 - userMessageCount} ${8 - userMessageCount === 1 ? "question" : "questions"} remaining. Ask only what is most critical for the implementation guide.`}
+
+Remember: every reply must use the JSON format above — including your final message.`;
 }
 
 // Inline display card for the Recommendations Report
@@ -664,10 +669,13 @@ export default function AuditPage() {
   ].includes(stage);
 
   // v2.0: system context for $79 chat intake — full structured context using freeAnalysisData
+  // userMessageCount is passed so the context can enforce a hard 8-question limit and
+  // tell Gemini exactly how many questions remain, preventing infinite clarification loops.
   const paid79SystemContext = useMemo(() => {
     if (stage !== "paid_79_chat_active" && stage !== "paid_79_chat_complete") return undefined;
-    return buildPaid79SystemContext(state.audit, state.user);
-  }, [stage, state.audit, state.user]);
+    const userMessageCount = state.messages.filter(m => m.role === "user").length;
+    return buildPaid79SystemContext(state.audit, state.user, userMessageCount);
+  }, [stage, state.audit, state.user, state.messages]);
 
   // v2.0: generate opening message when $79 chat first mounts (messages empty)
   const paid79OpeningTriggered = useRef(false);

@@ -45,7 +45,7 @@ async function callGeminiAuditWithContext(
   // message is a model-only turn (no prior user message in the client state),
   // so when the user sends their first reply the raw history would be
   // [{ role: "model" }], which Gemini rejects. Strip leading model entries.
-  const rawHistory = messages.slice(0, -1).slice(-6).map(m => ({
+  const rawHistory = messages.slice(0, -1).slice(-12).map(m => ({
     role:  m.role === "user" ? "user" : "model",
     parts: [{ text: m.content }],
   }));
